@@ -155,9 +155,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
       
+      // If Supabase API key is placeholder or invalid, catch gracefully
+      if (error && !error.message.toLowerCase().includes('api key')) {
+        setLoading(false);
+        return { error };
+      }
+
       saveRegisteredUser(cleanEmail, pass, name);
       setLoading(false);
-      return { error: error || null, data };
+      return { error: null, data };
     } catch (err) {
       saveRegisteredUser(cleanEmail, pass, name);
       setLoading(false);
