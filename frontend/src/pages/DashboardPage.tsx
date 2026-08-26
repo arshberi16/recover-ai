@@ -66,26 +66,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateTab, onS
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadDashboardData() {
-      setLoading(true);
-      const [kpiRes, trendRes, reasonRes, methodRes, insightRes, queueRes] = await Promise.all([
-        fetchKPISummary(),
-        fetchRevenueLossTrend(30),
-        fetchFailureReasons(),
-        fetchPaymentMethodPerformance(),
-        fetchBusinessInsights(),
-        fetchRecoveryQueue('High')
-      ]);
+    let isMounted = true;
+    
+    // Core stats load concurrently and update UI instantly
+    fetchKPISummary().then(data => {
+      if (isMounted) {
+        setKpis(data);
+        setLoading(false); // Hide main card skeleton instantly when KPIs arrive
+      }
+    }).catch(() => {
+      if (isMounted) setLoading(false);
+    });
 
-      setKpis(kpiRes);
-      setTrend(trendRes);
-      setReasons(reasonRes);
-      setMethods(methodRes);
-      setInsights(insightRes);
-      setQueue(queueRes.slice(0, 5)); // Top 5
-      setLoading(false);
-    }
-    loadDashboardData();
+    fetchRevenueLossTrend(30).then(data => isMounted && setTrend(data)).catch(() => {});
+    fetchFailureReasons().then(data => isMounted && setReasons(data)).catch(() => {});
+    fetchPaymentMethodPerformance().then(data => isMounted && setMethods(data)).catch(() => {});
+    fetchRecoveryQueue('High').then(data => isMounted && setQueue(data)).catch(() => {});
+
+    // AI Insights stream asynchronously without blocking KPI cards
+    fetchBusinessInsights().then(data => isMounted && setInsights(data)).catch(() => {});
+
+    return () => { isMounted = false; };
   }, []);
 
   const handleQuickRetry = async (e: React.MouseEvent, txnId: string) => {
