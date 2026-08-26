@@ -11,7 +11,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { signIn, signUp, demoLogin, loading } = useAuth();
+  const { signIn, signUp, verifyOtp, demoLogin, loading } = useAuth();
   const [tab, setTab] = useState<'signin' | 'signup'>('signin');
   const [step, setStep] = useState<'form' | 'otp_verify'>('form');
   
@@ -47,15 +47,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
 
     if (tab === 'signup') {
+      // Trigger Supabase Auth Email OTP
+      const signupRes = await signUp(email, password, fullName || email.split('@')[0]);
+      if (signupRes.error) {
+        setErrorMsg(signupRes.error.message || 'Signup failed');
+        return;
+      }
+
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedOtp(code);
       setStep('otp_verify');
       setTimer(60);
       setEnteredOtp('');
       
-      // Dispatch background OTP email via service
+      // Dispatch email notification
       sendOTPEmail(email, fullName || email.split('@')[0], code);
-      setSuccessMsg(`6-digit OTP code dispatched to ${email}`);
+      setSuccessMsg(`Official Supabase OTP verification code dispatched to ${email}`);
     } else {
       const res = await signIn(email, password);
       if (res.error) {
@@ -71,16 +78,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (enteredOtp.trim() !== generatedOtp.trim()) {
-      setErrorMsg('Invalid OTP code. Please check the code and try again.');
+    if (!enteredOtp || enteredOtp.length < 6) {
+      setErrorMsg('Please enter a valid 6-digit OTP code.');
       return;
     }
 
-    const res = await signUp(email, password, fullName || email.split('@')[0]);
+    const res = await verifyOtp(email, enteredOtp);
     if (res.error) {
-      setErrorMsg(res.error.message || 'Signup failed');
+      setErrorMsg(res.error.message || 'OTP verification failed');
     } else {
-      setSuccessMsg('Identity verified & account created successfully!');
+      setSuccessMsg('Supabase Email Verified & Merchant Account Created!');
       setTimeout(() => {
         setStep('form');
         onClose();
