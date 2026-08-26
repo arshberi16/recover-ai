@@ -225,7 +225,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 className="w-full justify-center py-2.5 font-bold"
                 icon={<ArrowRight className="w-4 h-4" />}
               >
-                {tab === 'signin' ? 'Sign In to Portal' : 'Continue to OTP Verification &rarr;'}
+                {tab === 'signin' ? 'Sign In to Portal' : 'Continue to OTP Verification'}
               </Button>
             </form>
 
