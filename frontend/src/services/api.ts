@@ -1,0 +1,314 @@
+import type {
+  Transaction,
+  KPISummary,
+  RevenueLossTrendPoint,
+  FailureReasonPoint,
+  PaymentMethodPerformancePoint,
+  BankPerformancePoint,
+  HourlyPatternPoint,
+  BusinessInsight,
+  PredictRequest,
+  PredictResponse,
+  InsightQueryResponse,
+  MLMetricsResponse
+} from '../types';
+
+const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+const apiCache = new Map<string, { timestamp: number; data: any }>();
+const CACHE_TTL_MS = 60000;
+
+function getCached<T>(key: string): T | null {
+  const item = apiCache.get(key);
+  if (!item) return null;
+  if (Date.now() - item.timestamp > CACHE_TTL_MS) {
+    apiCache.delete(key);
+    return null;
+  }
+  return item.data as T;
+}
+
+function setCached(key: string, data: any): void {
+  apiCache.set(key, { timestamp: Date.now(), data });
+}
+
+export const clearApiCache = () => {
+  apiCache.clear();
+};
+
+export const triggerGlobalDataRefresh = () => {
+  clearApiCache();
+  window.dispatchEvent(new Event('recoverai_refresh_data'));
+};
+
+const getUserEmailParam = (): string => {
+  const email = localStorage.getItem('recoverai_user_email');
+  return email ? `user_email=${encodeURIComponent(email)}` : '';
+};
+
+export async function fetchKPISummary(): Promise<KPISummary> {
+  const p = getUserEmailParam();
+  const cacheKey = `kpi_${p}`;
+  const cached = getCached<KPISummary>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/analytics/kpis?${p}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch KPIs from database`);
+  const data = await res.json();
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function fetchRevenueLossTrend(days = 30): Promise<RevenueLossTrendPoint[]> {
+  const p = getUserEmailParam();
+  const cacheKey = `trend_${days}_${p}`;
+  const cached = getCached<RevenueLossTrendPoint[]>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/analytics/revenue-loss-trend?days=${days}&${p}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch revenue trend from database`);
+  const data = await res.json();
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function fetchFailureReasons(): Promise<FailureReasonPoint[]> {
+  const p = getUserEmailParam();
+  const cacheKey = `reasons_${p}`;
+  const cached = getCached<FailureReasonPoint[]>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/analytics/failure-reasons?${p}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch failure reasons from database`);
+  const data = await res.json();
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function fetchPaymentMethodPerformance(): Promise<PaymentMethodPerformancePoint[]> {
+  const p = getUserEmailParam();
+  const cacheKey = `pm_${p}`;
+  const cached = getCached<PaymentMethodPerformancePoint[]>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/analytics/payment-methods?${p}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch payment method stats from database`);
+  const data = await res.json();
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function fetchBankPerformance(): Promise<BankPerformancePoint[]> {
+  const p = getUserEmailParam();
+  const cacheKey = `bank_${p}`;
+  const cached = getCached<BankPerformancePoint[]>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/analytics/bank-performance?${p}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch bank performance stats from database`);
+  const data = await res.json();
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function fetchHourlyPatterns(): Promise<HourlyPatternPoint[]> {
+  const p = getUserEmailParam();
+  const cacheKey = `hourly_${p}`;
+  const cached = getCached<HourlyPatternPoint[]>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/analytics/hourly-patterns?${p}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch hourly patterns from database`);
+  const data = await res.json();
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function fetchBusinessInsights(): Promise<BusinessInsight[]> {
+  const p = getUserEmailParam();
+  const cacheKey = `insights_${p}`;
+  const cached = getCached<BusinessInsight[]>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/insights?${p}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch business insights from database`);
+  const data = await res.json();
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function fetchRecoveryQueueCount(): Promise<number> {
+  const p = getUserEmailParam();
+  const cacheKey = `queue_cnt_${p}`;
+  const cached = getCached<number>(cacheKey);
+  if (cached !== null) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/transactions/queue/count?${p}`);
+  if (!res.ok) return 0;
+  const data = await res.json();
+  const count = data.count || 0;
+  setCached(cacheKey, count);
+  return count;
+}
+
+export async function fetchTransactions(params?: any): Promise<{ items: Transaction[]; total: number; page: number }> {
+  const searchParams = new URLSearchParams(params);
+  const email = localStorage.getItem('recoverai_user_email');
+  if (email && !searchParams.has('user_email')) {
+    searchParams.append('user_email', email);
+  }
+  const cacheKey = `txns_${searchParams.toString()}`;
+  const cached = getCached<{ items: Transaction[]; total: number; page: number }>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/transactions?${searchParams.toString()}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch transactions from database`);
+  const data = await res.json();
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function clearTransactions(): Promise<{ success: boolean; message: string }> {
+  const email = localStorage.getItem('recoverai_user_email') || 'demo';
+  const res = await fetch(`${API_BASE_URL}/transactions/clear?user_email=${encodeURIComponent(email)}`, {
+    method: 'POST'
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to clear transactions`);
+  const data = await res.json();
+  triggerGlobalDataRefresh();
+  return data;
+}
+
+export async function fetchRecoveryQueue(priority?: string): Promise<Transaction[]> {
+  const searchParams = new URLSearchParams();
+  if (priority && priority !== 'All') {
+    searchParams.append('priority', priority);
+  }
+  const email = localStorage.getItem('recoverai_user_email');
+  if (email) {
+    searchParams.append('user_email', email);
+  }
+  const cacheKey = `queue_${searchParams.toString()}`;
+  const cached = getCached<Transaction[]>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${API_BASE_URL}/transactions/queue?${searchParams.toString()}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch recovery queue from database`);
+  const data = await res.json();
+  setCached(cacheKey, data);
+  return data;
+}
+
+export async function executeRecoveryAction(transaction_id: string, action_type: string, notes?: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE_URL}/actions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transaction_id, action_type, notes })
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to execute recovery action`);
+  const data = await res.json();
+  triggerGlobalDataRefresh();
+  return data;
+}
+
+export async function ingestTransaction(payload: {
+  transaction_id: string;
+  customer_email: string;
+  customer_name?: string;
+  amount: number;
+  payment_method: string;
+  bank_name: string;
+  failure_reason: string;
+  status?: string;
+  transaction_timestamp?: string;
+}): Promise<{ success: boolean; message: string; transaction_id: string; ml_prediction?: any }> {
+  const res = await fetch(`${API_BASE_URL}/ingest/transaction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to ingest transaction`);
+  const data = await res.json();
+  triggerGlobalDataRefresh();
+  return data;
+}
+
+export async function uploadFile(file: File): Promise<{ success: boolean; message: string; count: number }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const p = getUserEmailParam();
+  const res = await fetch(`${API_BASE_URL}/ingest/upload-file?${p}`, {
+    method: 'POST',
+    body: formData
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to upload and parse file`);
+  const data = await res.json();
+  triggerGlobalDataRefresh();
+  return data;
+}
+
+export async function predictRecovery(req: PredictRequest): Promise<PredictResponse> {
+  const res = await fetch(`${API_BASE_URL}/predict-recovery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to execute ML recovery prediction`);
+  return await res.json();
+}
+
+export async function fetchMLMetrics(): Promise<MLMetricsResponse> {
+  const res = await fetch(`${API_BASE_URL}/predict/metrics`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch ML model metrics`);
+  return await res.json();
+}
+
+export async function queryAIInsights(question: string, date_range: string = "30d"): Promise<InsightQueryResponse> {
+  const res = await fetch(`${API_BASE_URL}/insights/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, date_range })
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to query RecoverAI AI Analyst`);
+  return await res.json();
+}
+
+export async function fetchSettings(): Promise<{
+  auto_retry_enabled: boolean;
+  minimum_recovery_probability: number;
+  maximum_retry_attempts: number;
+  retry_delay_minutes: number;
+  email_recovery_enabled: boolean;
+}> {
+  const p = getUserEmailParam();
+  const res = await fetch(`${API_BASE_URL}/settings?${p}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch merchant settings`);
+  return await res.json();
+}
+
+export async function updateSettings(settings: {
+  auto_retry_enabled: boolean;
+  minimum_recovery_probability: number;
+  maximum_retry_attempts: number;
+  retry_delay_minutes: number;
+  email_recovery_enabled: boolean;
+}): Promise<{ success: boolean; message: string }> {
+  const p = getUserEmailParam();
+  const res = await fetch(`${API_BASE_URL}/settings?${p}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to save merchant settings`);
+  return await res.json();
+}
+
+export async function deleteTransaction(id: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE_URL}/transactions/${id}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to delete transaction`);
+  const data = await res.json();
+  triggerGlobalDataRefresh();
+  return data;
+}
