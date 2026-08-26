@@ -13,9 +13,20 @@ import type {
   MLMetricsResponse
 } from '../types';
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const getBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl) {
+    let clean = envUrl.trim();
+    if (clean.endsWith('/')) clean = clean.slice(0, -1);
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
+  }
+  return 'http://127.0.0.1:8000/api';
+};
+
+const API_BASE_URL = getBaseUrl();
 
 const apiCache = new Map<string, { timestamp: number; data: any }>();
+const inFlightRequests = new Map<string, Promise<any>>();
 const CACHE_TTL_MS = 60000;
 
 function getCached<T>(key: string): T | null {
@@ -32,8 +43,30 @@ function setCached(key: string, data: any): void {
   apiCache.set(key, { timestamp: Date.now(), data });
 }
 
+async function fetchWithDeduplication<T>(cacheKey: string, fetcher: () => Promise<T>): Promise<T> {
+  const cached = getCached<T>(cacheKey);
+  if (cached) return cached;
+
+  if (inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey) as Promise<T>;
+  }
+
+  const promise = fetcher().then((data) => {
+    setCached(cacheKey, data);
+    inFlightRequests.delete(cacheKey);
+    return data;
+  }).catch((err) => {
+    inFlightRequests.delete(cacheKey);
+    throw err;
+  });
+
+  inFlightRequests.set(cacheKey, promise);
+  return promise;
+}
+
 export const clearApiCache = () => {
   apiCache.clear();
+  inFlightRequests.clear();
 };
 
 export const triggerGlobalDataRefresh = () => {
@@ -49,106 +82,82 @@ const getUserEmailParam = (): string => {
 export async function fetchKPISummary(): Promise<KPISummary> {
   const p = getUserEmailParam();
   const cacheKey = `kpi_${p}`;
-  const cached = getCached<KPISummary>(cacheKey);
-  if (cached) return cached;
-
-  const res = await fetch(`${API_BASE_URL}/analytics/kpis?${p}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch KPIs from database`);
-  const data = await res.json();
-  setCached(cacheKey, data);
-  return data;
+  return fetchWithDeduplication(cacheKey, async () => {
+    const res = await fetch(`${API_BASE_URL}/analytics/kpis?${p}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch KPIs from database`);
+    return await res.json();
+  });
 }
 
 export async function fetchRevenueLossTrend(days = 30): Promise<RevenueLossTrendPoint[]> {
   const p = getUserEmailParam();
   const cacheKey = `trend_${days}_${p}`;
-  const cached = getCached<RevenueLossTrendPoint[]>(cacheKey);
-  if (cached) return cached;
-
-  const res = await fetch(`${API_BASE_URL}/analytics/revenue-loss-trend?days=${days}&${p}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch revenue trend from database`);
-  const data = await res.json();
-  setCached(cacheKey, data);
-  return data;
+  return fetchWithDeduplication(cacheKey, async () => {
+    const res = await fetch(`${API_BASE_URL}/analytics/revenue-loss-trend?days=${days}&${p}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch revenue trend from database`);
+    return await res.json();
+  });
 }
 
 export async function fetchFailureReasons(): Promise<FailureReasonPoint[]> {
   const p = getUserEmailParam();
   const cacheKey = `reasons_${p}`;
-  const cached = getCached<FailureReasonPoint[]>(cacheKey);
-  if (cached) return cached;
-
-  const res = await fetch(`${API_BASE_URL}/analytics/failure-reasons?${p}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch failure reasons from database`);
-  const data = await res.json();
-  setCached(cacheKey, data);
-  return data;
+  return fetchWithDeduplication(cacheKey, async () => {
+    const res = await fetch(`${API_BASE_URL}/analytics/failure-reasons?${p}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch failure reasons from database`);
+    return await res.json();
+  });
 }
 
 export async function fetchPaymentMethodPerformance(): Promise<PaymentMethodPerformancePoint[]> {
   const p = getUserEmailParam();
   const cacheKey = `pm_${p}`;
-  const cached = getCached<PaymentMethodPerformancePoint[]>(cacheKey);
-  if (cached) return cached;
-
-  const res = await fetch(`${API_BASE_URL}/analytics/payment-methods?${p}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch payment method stats from database`);
-  const data = await res.json();
-  setCached(cacheKey, data);
-  return data;
+  return fetchWithDeduplication(cacheKey, async () => {
+    const res = await fetch(`${API_BASE_URL}/analytics/payment-methods?${p}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch payment method stats from database`);
+    return await res.json();
+  });
 }
 
 export async function fetchBankPerformance(): Promise<BankPerformancePoint[]> {
   const p = getUserEmailParam();
   const cacheKey = `bank_${p}`;
-  const cached = getCached<BankPerformancePoint[]>(cacheKey);
-  if (cached) return cached;
-
-  const res = await fetch(`${API_BASE_URL}/analytics/bank-performance?${p}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch bank performance stats from database`);
-  const data = await res.json();
-  setCached(cacheKey, data);
-  return data;
+  return fetchWithDeduplication(cacheKey, async () => {
+    const res = await fetch(`${API_BASE_URL}/analytics/bank-performance?${p}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch bank performance stats from database`);
+    return await res.json();
+  });
 }
 
 export async function fetchHourlyPatterns(): Promise<HourlyPatternPoint[]> {
   const p = getUserEmailParam();
   const cacheKey = `hourly_${p}`;
-  const cached = getCached<HourlyPatternPoint[]>(cacheKey);
-  if (cached) return cached;
-
-  const res = await fetch(`${API_BASE_URL}/analytics/hourly-patterns?${p}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch hourly patterns from database`);
-  const data = await res.json();
-  setCached(cacheKey, data);
-  return data;
+  return fetchWithDeduplication(cacheKey, async () => {
+    const res = await fetch(`${API_BASE_URL}/analytics/hourly-patterns?${p}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch hourly patterns from database`);
+    return await res.json();
+  });
 }
 
 export async function fetchBusinessInsights(): Promise<BusinessInsight[]> {
   const p = getUserEmailParam();
   const cacheKey = `insights_${p}`;
-  const cached = getCached<BusinessInsight[]>(cacheKey);
-  if (cached) return cached;
-
-  const res = await fetch(`${API_BASE_URL}/insights?${p}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch business insights from database`);
-  const data = await res.json();
-  setCached(cacheKey, data);
-  return data;
+  return fetchWithDeduplication(cacheKey, async () => {
+    const res = await fetch(`${API_BASE_URL}/insights?${p}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch business insights from database`);
+    return await res.json();
+  });
 }
 
 export async function fetchRecoveryQueueCount(): Promise<number> {
   const p = getUserEmailParam();
   const cacheKey = `queue_cnt_${p}`;
-  const cached = getCached<number>(cacheKey);
-  if (cached !== null) return cached;
-
-  const res = await fetch(`${API_BASE_URL}/transactions/queue/count?${p}`);
-  if (!res.ok) return 0;
-  const data = await res.json();
-  const count = data.count || 0;
-  setCached(cacheKey, count);
-  return count;
+  return fetchWithDeduplication(cacheKey, async () => {
+    const res = await fetch(`${API_BASE_URL}/transactions/queue/count?${p}`);
+    if (!res.ok) return 0;
+    const data = await res.json();
+    return data.count || 0;
+  });
 }
 
 export async function fetchTransactions(params?: any): Promise<{ items: Transaction[]; total: number; page: number }> {
