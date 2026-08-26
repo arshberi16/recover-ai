@@ -324,3 +324,17 @@ export async function deleteTransaction(id: string): Promise<{ success: boolean;
   triggerGlobalDataRefresh();
   return data;
 }
+
+export async function sendOTPEmail(email: string, name: string, otp_code: string): Promise<{ success: boolean }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/actions/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name, otp_code })
+    });
+    if (!res.ok) return { success: false };
+    return await res.json();
+  } catch (e) {
+    return { success: false };
+  }
+}

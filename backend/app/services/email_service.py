@@ -191,3 +191,58 @@ def _dispatch_email(to_email, subject, html_content, from_sender, resend_api_key
             print(f"SMTP dispatch error: {e}")
 
     return {"sent": False, "demo": True, "recipient": to_email}
+
+
+def send_otp_email(to_email: str, customer_name: str, otp_code: str) -> dict:
+    """
+    Dispatches a 6-digit OTP verification email for new merchant account signups.
+    """
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.resend.com")
+    smtp_port = os.getenv("SMTP_PORT", "587")
+    smtp_user = os.getenv("SMTP_USER", "resend")
+    smtp_pass = os.getenv("SMTP_PASSWORD") or resend_api_key
+
+    from_sender = "RecoverAI Engine <onboarding@resend.dev>"
+    subject = f"{otp_code} is your RecoverAI Account Verification Code"
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b; padding: 20px; margin: 0; }}
+        .card {{ background-color: #ffffff; max-width: 500px; margin: 0 auto; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }}
+        .header {{ border-bottom: 2px solid #2563eb; padding-bottom: 16px; margin-bottom: 24px; text-align: center; }}
+        .brand {{ color: #2563eb; font-size: 22px; font-weight: 800; tracking: -0.5px; }}
+        .otp-box {{ background-color: #eff6ff; border: 2px dashed #3b82f6; border-radius: 16px; padding: 20px; text-align: center; margin: 24px 0; }}
+        .otp-code {{ font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #1d4ed8; font-family: monospace; }}
+        .footer {{ font-size: 11px; color: #94a3b8; text-align: center; margin-top: 24px; }}
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="brand">RecoverAI Identity Verification</div>
+        </div>
+
+        <p>Hi <strong>{customer_name}</strong>,</p>
+        <p>Your 6-digit One-Time Password (OTP) for verifying your new RecoverAI Merchant Account is:</p>
+        
+        <div class="otp-box">
+          <div class="otp-code">{otp_code}</div>
+        </div>
+
+        <p>This verification code is valid for <strong>10 minutes</strong>. Please do not share this OTP with anyone.</p>
+
+        <div class="footer">
+          If you did not request this account creation, please ignore this email.<br>
+          Protected by RecoverAI Enterprise Authentication.
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    return _dispatch_email(to_email, subject, html_content, from_sender, resend_api_key, smtp_host, smtp_port, smtp_user, smtp_pass)
