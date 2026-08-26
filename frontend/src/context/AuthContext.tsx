@@ -138,12 +138,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     clearApiCache();
     const cleanEmail = email.toLowerCase().trim();
-    const registered = getRegisteredUsers();
-
-    if (registered[cleanEmail]) {
-      setLoading(false);
-      return { error: { message: "An account with this email already exists. Please Sign In." } };
-    }
 
     try {
       // Trigger official Supabase Auth Email OTP signup
@@ -155,16 +149,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
       
-      // If Supabase API key is placeholder or invalid, catch gracefully
-      if (error && !error.message.toLowerCase().includes('api key')) {
-        setLoading(false);
-        return { error };
+      // Only return duplicate error if Supabase explicitly confirms user already exists
+      if (error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user_already_exists')) {
+          setLoading(false);
+          return { error: { message: "An account with this email already exists. Please Sign In." } };
+        }
       }
 
       saveRegisteredUser(cleanEmail, pass, name);
       registerMerchantProfile(cleanEmail, name);
       setLoading(false);
-      return { error: error || null, data };
+      return { error: null, data };
     } catch (err) {
       saveRegisteredUser(cleanEmail, pass, name);
       registerMerchantProfile(cleanEmail, name);
