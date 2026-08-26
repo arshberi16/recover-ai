@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Mail, Lock, User as UserIcon, ArrowRight, CheckCircle2, Sparkles, KeyRound, RotateCcw, Copy, Check } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, User as UserIcon, ArrowRight, CheckCircle2, Sparkles, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { sendOTPEmail } from '../../services/api';
 import { Modal } from '../ui/Modal';
@@ -21,7 +21,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [enteredOtp, setEnteredOtp] = useState('');
   const [timer, setTimer] = useState(60);
-  const [copied, setCopied] = useState(false);
   
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -83,11 +82,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
+    if (generatedOtp && enteredOtp.trim() !== generatedOtp.trim()) {
+      setErrorMsg('Invalid OTP code. Please check your email inbox and try again.');
+      return;
+    }
+
     const res = await verifyOtp(email, enteredOtp);
     if (res.error) {
       setErrorMsg(res.error.message || 'OTP verification failed');
     } else {
-      setSuccessMsg('Supabase Email Verified & Merchant Account Created!');
+      setSuccessMsg('Email Verified & Merchant Account Created!');
       setTimeout(() => {
         setStep('form');
         onClose();
@@ -108,12 +112,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     demoLogin('Payment Operations Lead');
     setSuccessMsg('Logged in as Payment Operations Lead!');
     setTimeout(() => onClose(), 600);
-  };
-
-  const handleCopyOTP = () => {
-    navigator.clipboard.writeText(generatedOtp);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -253,35 +251,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         ) : (
           /* STEP 2: OTP Verification UI */
           <div className="space-y-5">
-            {/* Interactive Demo OTP Toast Banner */}
-            <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold flex items-center gap-1.5 text-blue-700 dark:text-blue-300">
-                  <KeyRound className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  Verification OTP Dispatched:
-                </span>
-                <span className="font-mono font-extrabold text-base tracking-widest text-blue-600 dark:text-blue-400">
-                  {generatedOtp}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px] pt-1 border-t border-blue-200/60 dark:border-blue-800/60">
-                <span className="text-blue-600/80 dark:text-blue-300/80">Code sent to <strong>{email}</strong></span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCopyOTP}
-                    className="hover:underline flex items-center gap-1 font-bold text-blue-700 dark:text-blue-300"
-                  >
-                    {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                    {copied ? 'Copied' : 'Copy'}
-                  </button>
-                  <button
-                    onClick={() => setEnteredOtp(generatedOtp)}
-                    className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px]"
-                  >
-                    Auto-Fill
-                  </button>
-                </div>
-              </div>
+            {/* Email Check Notice */}
+            <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs space-y-1 text-center">
+              <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400 mx-auto mb-1" />
+              <div className="font-bold text-sm text-slate-900 dark:text-white">Check Your Email Inbox</div>
+              <p className="text-slate-600 dark:text-slate-300">
+                We have sent a 6-digit One-Time Password (OTP) to <strong>{email}</strong>. Enter the verification code received in your email inbox below to verify and complete your registration.
+              </p>
             </div>
 
             {errorMsg && (
