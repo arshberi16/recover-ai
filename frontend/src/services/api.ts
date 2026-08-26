@@ -338,3 +338,17 @@ export async function sendOTPEmail(email: string, name: string, otp_code: string
     return { success: false };
   }
 }
+
+export async function registerMerchantProfile(email: string, full_name: string): Promise<{ success: boolean }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/settings/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, full_name })
+    });
+    if (!res.ok) return { success: false };
+    return await res.json();
+  } catch (e) {
+    return { success: false };
+  }
+}

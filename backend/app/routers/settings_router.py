@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import MerchantSettings
-from app.services.auth_middleware import get_current_merchant, AuthenticatedMerchant
+from app.models import MerchantSettings, Profile
+from typing import Optional
 
 router = APIRouter(prefix="/api/settings", tags=["Persistent Merchant Settings"])
 
@@ -15,6 +15,43 @@ class SettingsPayload(BaseModel):
     maximum_retry_attempts: int = Field(default=3)
     retry_delay_minutes: int = Field(default=120)
     email_recovery_enabled: bool = Field(default=True)
+
+class ProfilePayload(BaseModel):
+    email: str
+    full_name: str
+    company_name: Optional[str] = "RecoverAI Merchant"
+    role: Optional[str] = "Payment Operations"
+
+@router.post("/profile")
+def create_or_update_profile(
+    payload: ProfilePayload,
+    db: Session = Depends(get_db)
+):
+    """
+    Persists registered merchant user profiles directly to the public.profiles database table.
+    """
+    clean_email = payload.email.strip().lower()
+    prof = db.query(Profile).filter(Profile.email.ilike(clean_email)).first()
+    if not prof:
+        prof = Profile(
+            id=uuid.uuid4(),
+            email=clean_email,
+            full_name=payload.full_name,
+            company_name=payload.company_name,
+            role=payload.role
+        )
+        db.add(prof)
+    else:
+        prof.full_name = payload.full_name
+        if payload.company_name:
+            prof.company_name = payload.company_name
+        if payload.role:
+            prof.role = payload.role
+        prof.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(prof)
+    return {"success": True, "profile_id": str(prof.id), "email": prof.email}
 
 @router.get("")
 def get_merchant_settings(

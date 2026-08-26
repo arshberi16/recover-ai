@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
-import { clearApiCache } from '../services/api';
+import { clearApiCache, registerMerchantProfile } from '../services/api';
 
 interface AuthUser {
   id: string;
@@ -162,10 +162,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       saveRegisteredUser(cleanEmail, pass, name);
+      registerMerchantProfile(cleanEmail, name);
       setLoading(false);
-      return { error: null, data };
+      return { error: error || null, data };
     } catch (err) {
       saveRegisteredUser(cleanEmail, pass, name);
+      registerMerchantProfile(cleanEmail, name);
       setLoading(false);
       return { error: null };
     }
@@ -185,14 +187,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (!error && data?.user) {
+        const uName = data.user.user_metadata?.full_name || cleanEmail.split('@')[0];
         const u = {
           id: data.user.id,
           email: data.user.email || cleanEmail,
-          name: data.user.user_metadata?.full_name || cleanEmail.split('@')[0],
+          name: uName,
           role: 'Merchant Account'
         };
         setUser(u);
         localStorage.setItem('recoverai_user_email', u.email);
+        registerMerchantProfile(u.email, uName);
         setLoading(false);
         return { error: null };
       }
@@ -201,14 +205,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Fallback/Sandbox OTP verification support
     const registered = getRegisteredUsers();
     const userAcc = registered[cleanEmail];
+    const uName = userAcc?.name || cleanEmail.split('@')[0];
     const u = {
       id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
       email: cleanEmail,
-      name: userAcc?.name || cleanEmail.split('@')[0],
+      name: uName,
       role: 'Merchant Account'
     };
     setUser(u);
     localStorage.setItem('recoverai_user_email', u.email);
+    registerMerchantProfile(u.email, uName);
     setLoading(false);
     return { error: null };
   };
