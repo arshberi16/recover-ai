@@ -53,22 +53,22 @@ function MainContent() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen bg-slate-950 text-slate-100 flex-col items-center justify-center p-6 text-center">
-        <div className="max-w-md space-y-6 bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl relative overflow-hidden">
+      <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex-col items-center justify-center p-6 text-center transition-colors">
+        <div className="max-w-md space-y-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl shadow-xl dark:shadow-2xl relative overflow-hidden">
           <div className="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
           
-          <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center mx-auto text-blue-400">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-blue-500/30 flex items-center justify-center mx-auto text-blue-600 dark:text-blue-400 shadow-sm">
             <Lock className="w-8 h-8" />
           </div>
 
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold uppercase tracking-wider">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 text-xs font-bold uppercase tracking-wider">
               <ShieldAlert className="w-3.5 h-3.5" /> Identity Authentication Required
             </div>
-            <h1 className="text-2xl font-extrabold text-white tracking-tight">
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               RecoverAI Intelligence Portal
             </h1>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               Company transaction telemetry, ML recovery queues, and financial metrics are protected by RecoverAI Enterprise Security. Please sign in to access your portal.
             </p>
           </div>
@@ -76,7 +76,7 @@ function MainContent() {
           <div className="space-y-3 pt-2">
             <Button
               variant="primary"
-              className="w-full justify-center py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold"
+              className="w-full justify-center py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-md shadow-blue-500/20"
               icon={<ArrowRight className="w-4 h-4" />}
               onClick={() => setIsAuthModalOpen(true)}
             >
@@ -85,9 +85,9 @@ function MainContent() {
 
             <button
               onClick={() => demoLogin('Payment Operations Admin')}
-              className="w-full py-3 rounded-xl border border-slate-800 bg-slate-800/80 hover:bg-slate-800 text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition-all flex items-center justify-center gap-2"
             >
-              <Sparkles className="w-4 h-4 text-blue-400" />
+              <Sparkles className="w-4 h-4 text-blue-500 dark:text-blue-400" />
               Instant Demo Payment Ops Login
             </button>
           </div>
