@@ -20,6 +20,9 @@ const getBaseUrl = (): string => {
     if (clean.endsWith('/')) clean = clean.slice(0, -1);
     return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return 'https://recover-ai-ja36.onrender.com/api';
+  }
   return 'http://127.0.0.1:8000/api';
 };
 
