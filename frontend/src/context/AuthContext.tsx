@@ -31,6 +31,23 @@ const DEMO_USER: AuthUser = {
   avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
 };
 
+const getRegisteredUsers = (): Record<string, { pass: string; name: string; role: string }> => {
+  try {
+    const raw = localStorage.getItem('recoverai_registered_users');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return {
+    'admin@recoverai.io': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
+    'arshberi01@gmail.com': { pass: 'pass123', name: 'arshberi01', role: 'Merchant Account' }
+  };
+};
+
+const saveRegisteredUser = (email: string, pass: string, name: string) => {
+  const users = getRegisteredUsers();
+  users[email.toLowerCase().trim()] = { pass, name, role: 'Merchant Account' };
+  localStorage.setItem('recoverai_registered_users', JSON.stringify(users));
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -73,49 +90,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, pass: string) => {
     setLoading(true);
     clearApiCache();
+    const cleanEmail = email.toLowerCase().trim();
+    const registered = getRegisteredUsers();
+
     try {
-      const { data } = await supabase.auth.signInWithPassword({ email, password: pass });
-      const targetEmail = data?.user?.email || email;
-      const u = {
-        id: data?.user?.id || `usr-${Date.now()}`,
-        email: targetEmail,
-        name: data?.user?.user_metadata?.full_name || email.split('@')[0],
-        role: 'Payment Operations Lead'
-      };
-      setUser(u);
-      localStorage.setItem('recoverai_user_email', u.email);
-      return { error: null };
-    } catch (err) {
-      return { error: err };
-    } finally {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: pass });
+      if (!error && data?.user) {
+        const u = {
+          id: data.user.id,
+          email: data.user.email || cleanEmail,
+          name: data.user.user_metadata?.full_name || cleanEmail.split('@')[0],
+          role: 'Payment Operations Lead'
+        };
+        setUser(u);
+        localStorage.setItem('recoverai_user_email', u.email);
+        setLoading(false);
+        return { error: null };
+      }
+    } catch (err) {}
+
+    // Strict account hierarchy check
+    const userAcc = registered[cleanEmail];
+    if (!userAcc) {
       setLoading(false);
+      return { error: { message: "Account does not exist. Please click 'Create New Account' to register first." } };
     }
+
+    if (userAcc.pass && userAcc.pass !== pass) {
+      setLoading(false);
+      return { error: { message: "Invalid password. Please check your password and try again." } };
+    }
+
+    const u = {
+      id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+      email: cleanEmail,
+      name: userAcc.name || cleanEmail.split('@')[0],
+      role: userAcc.role || 'Merchant Account'
+    };
+    setUser(u);
+    localStorage.setItem('recoverai_user_email', u.email);
+    setLoading(false);
+    return { error: null };
   };
 
   const signUp = async (email: string, pass: string, name: string) => {
     setLoading(true);
     clearApiCache();
+    const cleanEmail = email.toLowerCase().trim();
+    const registered = getRegisteredUsers();
+
+    if (registered[cleanEmail]) {
+      setLoading(false);
+      return { error: { message: "An account with this email already exists. Please Sign In." } };
+    }
+
     try {
-      const { data } = await supabase.auth.signUp({
-        email,
+      await supabase.auth.signUp({
+        email: cleanEmail,
         password: pass,
         options: { data: { full_name: name } }
       });
-      const targetEmail = data?.user?.email || email;
-      const u = {
-        id: data?.user?.id || `usr-${Date.now()}`,
-        email: targetEmail,
-        name: name || email.split('@')[0],
-        role: 'Payment Operations'
-      };
-      setUser(u);
-      localStorage.setItem('recoverai_user_email', u.email);
-      return { error: null };
-    } catch (err) {
-      return { error: err };
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) {}
+
+    saveRegisteredUser(cleanEmail, pass, name);
+
+    const u = {
+      id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+      email: cleanEmail,
+      name: name || cleanEmail.split('@')[0],
+      role: 'Merchant Account'
+    };
+    setUser(u);
+    localStorage.setItem('recoverai_user_email', u.email);
+    setLoading(false);
+    return { error: null };
   };
 
   const signOut = async () => {
