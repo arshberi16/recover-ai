@@ -157,56 +157,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: { message: "An account with this email already exists. Please Sign In." } };
     }
 
-    try {
-      // 2. Trigger Supabase Auth signup
-      const { data, error } = await supabase.auth.signUp({
+    // 2. Save user locally & update UI INSTANTLY (< 50ms response)!
+    saveRegisteredUser(cleanEmail, pass, name);
+    const u = {
+      id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+      email: cleanEmail,
+      name: name || cleanEmail.split('@')[0],
+      role: 'Merchant Account'
+    };
+    setUser(u);
+    localStorage.setItem('recoverai_user_email', u.email);
+    setLoading(false);
+
+    // 3. Dispatch Supabase auth, profile persistence, and email notification in background
+    Promise.allSettled([
+      supabase.auth.signUp({
         email: cleanEmail,
         password: pass,
-        options: {
-          data: { full_name: name }
-        }
-      });
-      
-      if (error) {
-        const msg = error.message.toLowerCase();
-        if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user_already_exists')) {
-          setLoading(false);
-          return { error: { message: "An account with this email already exists. Please Sign In." } };
-        }
-      }
+        options: { data: { full_name: name } }
+      }),
+      registerMerchantProfile(cleanEmail, name),
+      sendWelcomeEmail(cleanEmail, name)
+    ]).catch(() => {});
 
-      saveRegisteredUser(cleanEmail, pass, name);
-      await registerMerchantProfile(cleanEmail, name);
-      await sendWelcomeEmail(cleanEmail, name);
-
-      const u = {
-        id: data?.user?.id || `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
-        email: cleanEmail,
-        name: name || cleanEmail.split('@')[0],
-        role: 'Merchant Account'
-      };
-      setUser(u);
-      localStorage.setItem('recoverai_user_email', u.email);
-
-      setLoading(false);
-      return { error: null, data };
-    } catch (err) {
-      saveRegisteredUser(cleanEmail, pass, name);
-      await registerMerchantProfile(cleanEmail, name);
-      await sendWelcomeEmail(cleanEmail, name);
-
-      const u = {
-        id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
-        email: cleanEmail,
-        name: name || cleanEmail.split('@')[0],
-        role: 'Merchant Account'
-      };
-      setUser(u);
-      localStorage.setItem('recoverai_user_email', u.email);
-
-      setLoading(false);
-      return { error: null };
-    }
+    return { error: null, data: { user: u } };
   };
 
   const verifyOtp = async (email: string, token: string) => {
