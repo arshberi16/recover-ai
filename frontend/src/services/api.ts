@@ -360,8 +360,12 @@ export async function registerMerchantProfile(email: string, full_name: string):
 export async function sendWelcomeEmail(email: string, name: string): Promise<{ success: boolean }> {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch(`${API_BASE_URL}/actions/send-welcome`, {
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const targetUrl = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+      ? '/api/send-welcome'
+      : `${API_BASE_URL}/actions/send-welcome`;
+
+    const res = await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, name }),
