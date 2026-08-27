@@ -330,3 +330,60 @@ def send_welcome_email(to_email: str, customer_name: str) -> dict:
 
     # Send directly to whichever email address the user typed when creating their account!
     return _dispatch_email(to_email, subject, html_content, from_sender, resend_api_key, smtp_host, smtp_port, smtp_user, smtp_pass)
+
+
+def send_password_reset_email(to_email: str, reset_code: str) -> dict:
+    """
+    Dispatches a 6-digit Password Reset Verification Code email to the merchant.
+    """
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = os.getenv("SMTP_PORT", "587")
+    smtp_user = os.getenv("SMTP_USER", "recoveryai1909@gmail.com")
+    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or "mgvegyphvywjuclw"
+
+    from_sender = f"RecoverAI Engine <{smtp_user}>"
+    subject = f"{reset_code} is your RecoverAI Password Reset Code"
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b; padding: 20px; margin: 0; }}
+        .card {{ background-color: #ffffff; max-width: 500px; margin: 0 auto; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }}
+        .header {{ border-bottom: 2px solid #ef4444; padding-bottom: 16px; margin-bottom: 24px; text-align: center; }}
+        .brand {{ color: #2563eb; font-size: 22px; font-weight: 800; tracking: -0.5px; }}
+        .badge {{ background-color: #fef2f2; color: #dc2626; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; display: inline-block; margin-top: 8px; }}
+        .reset-box {{ background-color: #fff1f2; border: 2px dashed #f43f5e; border-radius: 16px; padding: 20px; text-align: center; margin: 24px 0; }}
+        .reset-code {{ font-size: 38px; font-weight: 900; letter-spacing: 8px; color: #be123c; font-family: monospace; }}
+        .footer {{ font-size: 11px; color: #94a3b8; text-align: center; margin-top: 24px; }}
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="brand">RecoverAI Security Portal</div>
+          <div class="badge">🔒 Password Reset Requested</div>
+        </div>
+
+        <p>Hi Merchant,</p>
+        <p>You requested to reset your password for merchant account <code>{to_email}</code>. Your 6-digit Security Verification Code is:</p>
+        
+        <div class="reset-box">
+          <div class="reset-code">{reset_code}</div>
+        </div>
+
+        <p>Enter this code in your RecoverAI portal along with your new password. This code will expire in <strong>15 minutes</strong>.</p>
+
+        <div class="footer">
+          If you did not request a password reset, please ignore this email.<br>
+          Protected by RecoverAI Enterprise Auth Security.
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    return _dispatch_email(to_email, subject, html_content, from_sender, resend_api_key, smtp_host, smtp_port, smtp_user, smtp_pass)

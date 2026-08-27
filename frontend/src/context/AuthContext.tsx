@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
-import { clearApiCache, registerMerchantProfile, sendWelcomeEmail } from '../services/api';
+import { clearApiCache, registerMerchantProfile, sendWelcomeEmail, sendResetCodeEmail as sendResetCodeEmailService } from '../services/api';
 
 interface AuthUser {
   id: string;
@@ -20,6 +20,9 @@ interface AuthContextType {
   verifyOtp: (email: string, token: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   demoLogin: (role?: string) => void;
+  deleteAccount: (email?: string) => Promise<{ success: boolean }>;
+  resetPassword: (email: string, newPass: string) => Promise<{ success: boolean }>;
+  sendResetCodeEmail: (email: string, code: string) => Promise<{ success: boolean }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -121,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {}
 
-    // Strict account hierarchy check: Only pre-approved accounts and accounts created via Sign Up can log in
+    // Strict account hierarchy check: Only registered accounts and pre-approved accounts can log in
     const userAcc = registered[cleanEmail];
     const isPreApproved = cleanEmail === 'arshberi01@gmail.com' || cleanEmail === 'admin@recoverai.io';
 
@@ -130,8 +133,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: { message: "Account does not exist. Please click 'Create New Account' to register first." } };
     }
 
-    // Save/update registered user details for session persistence
-    saveRegisteredUser(cleanEmail, pass, userAcc?.name || cleanEmail.split('@')[0]);
+    // Strict password verification check
+    if (userAcc && userAcc.pass && userAcc.pass !== pass) {
+      setLoading(false);
+      return { error: { message: "Invalid password. Please check your credentials or click 'Forgot Password?' to reset." } };
+    }
 
     const u = {
       id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
@@ -266,8 +272,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('recoverai_user_email', u.email);
   };
 
+  const deleteAccount = async (targetEmail?: string): Promise<{ success: boolean }> => {
+    const emailToDelete = (targetEmail || user?.email || '').toLowerCase().trim();
+    if (!emailToDelete) return { success: false };
+
+    const users = getRegisteredUsers();
+    delete users[emailToDelete];
+    localStorage.setItem('recoverai_registered_users', JSON.stringify(users));
+
+    if (user?.email.toLowerCase() === emailToDelete) {
+      await signOut();
+    }
+    return { success: true };
+  };
+
+  const resetPassword = async (email: string, newPass: string): Promise<{ success: boolean }> => {
+    const cleanEmail = email.toLowerCase().trim();
+    const users = getRegisteredUsers();
+    if (users[cleanEmail]) {
+      users[cleanEmail].pass = newPass;
+    } else {
+      saveRegisteredUser(cleanEmail, newPass, cleanEmail.split('@')[0]);
+    }
+    localStorage.setItem('recoverai_registered_users', JSON.stringify(users));
+    return { success: true };
+  };
+
+  const sendResetCodeEmail = async (email: string, code: string): Promise<{ success: boolean }> => {
+    return await sendResetCodeEmailService(email.toLowerCase().trim(), code);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, verifyOtp, signOut, demoLogin }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, verifyOtp, signOut, demoLogin, deleteAccount, resetPassword, sendResetCodeEmail }}>
       {children}
     </AuthContext.Provider>
   );

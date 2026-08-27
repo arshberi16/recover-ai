@@ -378,3 +378,25 @@ export async function sendWelcomeEmail(email: string, name: string): Promise<{ s
     return { success: false };
   }
 }
+
+export async function sendResetCodeEmail(email: string, reset_code: string): Promise<{ success: boolean }> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const targetUrl = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+      ? '/api/send-reset'
+      : `${API_BASE_URL}/actions/send-reset`;
+
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, reset_code }),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!res.ok) return { success: false };
+    return await res.json();
+  } catch (e) {
+    return { success: false };
+  }
+}

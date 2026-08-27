@@ -8,15 +8,20 @@ import {
   Sun, 
   Save, 
   CheckCircle,
-  Key
+  Key,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
 import { fetchSettings, updateSettings } from '../services/api';
 
 export const SettingsPage: React.FC = () => {
   const { theme, setTheme } = useTheme();
+  const { user, deleteAccount } = useAuth();
 
   // Profile Form
   const [name, setName] = useState('Payment Operations Lead');
@@ -34,6 +39,17 @@ export const SettingsPage: React.FC = () => {
 
   const [savedMsg, setSavedMsg] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAccountConfirm = async () => {
+    setDeleting(true);
+    await deleteAccount();
+    setDeleting(false);
+    setShowDeleteModal(false);
+  };
 
   React.useEffect(() => {
     async function loadSettings() {
@@ -287,7 +303,65 @@ export const SettingsPage: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* DANGER ZONE - DELETE ACCOUNT */}
+        <Card className="border-rose-300 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm text-rose-700 dark:text-rose-400 font-bold">
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              Account Danger Zone & Data Purge
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-xs">
+            <p className="text-slate-600 dark:text-slate-400">
+              Permanently delete your merchant profile and clear active sessions for <code className="font-bold text-slate-800 dark:text-slate-200">{user?.email || 'this account'}</code>. This action cannot be undone.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => setShowDeleteModal(true)}
+              className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs"
+              icon={<Trash2 className="w-3.5 h-3.5" />}
+            >
+              Delete Account
+            </Button>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Delete Account Modal Confirmation */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Confirm Account Deletion"
+      >
+        <div className="space-y-4 p-1">
+          <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-rose-800 dark:text-rose-300 font-medium">
+              <strong className="block font-bold mb-0.5">Are you sure you want to delete this account?</strong>
+              Deleting your account will remove merchant profile records for <code className="font-mono bg-rose-100 dark:bg-rose-900/80 px-1 py-0.5 rounded text-rose-900 dark:text-rose-100">{user?.email}</code> and log you out immediately.
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteModal(false)}
+              className="text-xs font-bold"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteAccountConfirm}
+              disabled={deleting}
+              className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold"
+              icon={<Trash2 className="w-3.5 h-3.5" />}
+            >
+              {deleting ? 'Deleting Account...' : 'Yes, Permanently Delete Account'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
