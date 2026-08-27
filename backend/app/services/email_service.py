@@ -269,7 +269,7 @@ def send_otp_email(to_email: str, customer_name: str, otp_code: str) -> dict:
 
 def send_welcome_email(to_email: str, customer_name: str) -> dict:
     """
-    Dispatches an Account Creation Welcome Confirmation email to newly registered merchants.
+    Dispatches an Account Creation Welcome Confirmation email to newly registered merchants via Gmail SMTP.
     Sends directly to whichever email address the new user registered with!
     """
     resend_api_key = os.getenv("RESEND_API_KEY")
