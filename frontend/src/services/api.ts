@@ -341,11 +341,15 @@ export async function sendOTPEmail(email: string, name: string, otp_code: string
 
 export async function registerMerchantProfile(email: string, full_name: string): Promise<{ success: boolean }> {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
     const res = await fetch(`${API_BASE_URL}/settings/profile`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, full_name })
+      body: JSON.stringify({ email, full_name }),
+      signal: controller.signal
     });
+    clearTimeout(timer);
     if (!res.ok) return { success: false };
     return await res.json();
   } catch (e) {
@@ -355,11 +359,15 @@ export async function registerMerchantProfile(email: string, full_name: string):
 
 export async function sendWelcomeEmail(email: string, name: string): Promise<{ success: boolean }> {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
     const res = await fetch(`${API_BASE_URL}/actions/send-welcome`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name })
+      body: JSON.stringify({ email, name }),
+      signal: controller.signal
     });
+    clearTimeout(timer);
     if (!res.ok) return { success: false };
     return await res.json();
   } catch (e) {

@@ -158,11 +158,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      // 2. Execute profile persistence & welcome email dispatch FIRST before unmounting UI
-      await registerMerchantProfile(cleanEmail, name);
-      await sendWelcomeEmail(cleanEmail, name);
-
-      // 3. Save user locally & log in
       saveRegisteredUser(cleanEmail, pass, name);
       const u = {
         id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
@@ -170,10 +165,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: name || cleanEmail.split('@')[0],
         role: 'Merchant Account'
       };
+
+      // 2. Race against a 1.2s max safety timer so UI NEVER hangs under ANY condition!
+      const emailPromise = sendWelcomeEmail(cleanEmail, name);
+      const profilePromise = registerMerchantProfile(cleanEmail, name);
+      const timeoutPromise = new Promise(resolve => setTimeout(resolve, 1200));
+
+      await Promise.race([
+        Promise.allSettled([emailPromise, profilePromise]),
+        timeoutPromise
+      ]);
+
       setUser(u);
       localStorage.setItem('recoverai_user_email', u.email);
 
-      // 4. Background Supabase Auth sync
+      // 3. Background Supabase Auth sync
       supabase.auth.signUp({
         email: cleanEmail,
         password: pass,
