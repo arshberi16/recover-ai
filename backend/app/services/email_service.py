@@ -149,7 +149,26 @@ def send_receipt_confirmation_email(
 
 
 def _dispatch_email(to_email, subject, html_content, from_sender, resend_api_key, smtp_host, smtp_port, smtp_user, smtp_pass):
-    # 1. Try Resend HTTP API if key provided
+    # 1. Try Gmail / Standard SMTP if configured (delivers to ANY email address worldwide)
+    if smtp_user and smtp_pass and "gmail.com" in smtp_host:
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"RecoverAI Operations <{smtp_user}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(html_content, "html"))
+
+            with smtplib.SMTP(smtp_host, int(smtp_port)) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, to_email, msg.as_string())
+
+            print(f"Physical email sent via Gmail SMTP to {to_email}")
+            return {"sent": True, "provider": "Gmail SMTP", "recipient": to_email}
+        except Exception as e:
+            print(f"Gmail SMTP dispatch error: {e}")
+
+    # 2. Try Resend HTTP API if key provided
     if resend_api_key:
         try:
             url = "https://api.resend.com/emails"
@@ -171,7 +190,7 @@ def _dispatch_email(to_email, subject, html_content, from_sender, resend_api_key
         except Exception as e:
             print(f"Resend API error: {e}")
 
-    # 2. Try SMTP if user/password provided
+    # 3. Try Resend SMTP
     if smtp_user and smtp_pass:
         try:
             msg = MIMEMultipart("alternative")
@@ -251,6 +270,7 @@ def send_otp_email(to_email: str, customer_name: str, otp_code: str) -> dict:
 def send_welcome_email(to_email: str, customer_name: str) -> dict:
     """
     Dispatches an Account Creation Welcome Confirmation email to newly registered merchants.
+    Sends directly to whichever email address the new user registered with!
     """
     resend_api_key = os.getenv("RESEND_API_KEY")
     smtp_host = os.getenv("SMTP_HOST", "smtp.resend.com")
@@ -308,4 +328,5 @@ def send_welcome_email(to_email: str, customer_name: str) -> dict:
     </html>
     """
 
+    # Send directly to whichever email address the user typed when creating their account!
     return _dispatch_email(to_email, subject, html_content, from_sender, resend_api_key, smtp_host, smtp_port, smtp_user, smtp_pass)

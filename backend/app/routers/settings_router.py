@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import MerchantSettings, Profile
+from app.services.auth_middleware import get_current_merchant, AuthenticatedMerchant
 from typing import Optional
 
 router = APIRouter(prefix="/api/settings", tags=["Persistent Merchant Settings"])

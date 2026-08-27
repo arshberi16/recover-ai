@@ -32,15 +32,26 @@ const DEMO_USER: AuthUser = {
   avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
 };
 
+const PRIMARY_ACCOUNTS: Record<string, { pass: string; name: string; role: string }> = {
+  'admin@recoverai.io': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
+  'arshberi01@gmail.com': { pass: 'pass123', name: 'arshberi01', role: 'Merchant Account' }
+};
+
 const getRegisteredUsers = (): Record<string, { pass: string; name: string; role: string }> => {
   try {
     const raw = localStorage.getItem('recoverai_registered_users');
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const clean: Record<string, { pass: string; name: string; role: string }> = { ...PRIMARY_ACCOUNTS };
+      for (const k in parsed) {
+        if (PRIMARY_ACCOUNTS[k] || k === 'admin@recoverai.io' || k === 'arshberi01@gmail.com') {
+          clean[k] = parsed[k];
+        }
+      }
+      return clean;
+    }
   } catch (e) {}
-  return {
-    'admin@recoverai.io': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
-    'arshberi01@gmail.com': { pass: 'pass123', name: 'arshberi01', role: 'Merchant Account' }
-  };
+  return { ...PRIMARY_ACCOUNTS };
 };
 
 const saveRegisteredUser = (email: string, pass: string, name: string) => {
