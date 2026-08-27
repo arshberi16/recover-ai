@@ -37,6 +37,7 @@ const DEMO_USER: AuthUser = {
 
 const PRIMARY_ACCOUNTS: Record<string, { pass: string; name: string; role: string }> = {
   'admin@recoverai.io': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
+  'admin@recover.ai': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
   'arshberi01@gmail.com': { pass: 'pass123', name: 'arshberi01', role: 'Merchant Account' }
 };
 
@@ -47,7 +48,7 @@ const getRegisteredUsers = (): Record<string, { pass: string; name: string; role
       const parsed = JSON.parse(raw);
       const clean: Record<string, { pass: string; name: string; role: string }> = { ...PRIMARY_ACCOUNTS };
       for (const k in parsed) {
-        if (k === 'admin@recoverai.io' || k === 'arshberi01@gmail.com') {
+        if (PRIMARY_ACCOUNTS[k]) {
           clean[k] = parsed[k];
         }
       }
@@ -126,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Strict account hierarchy check: Only registered accounts and pre-approved accounts can log in
     const userAcc = registered[cleanEmail];
-    const isPreApproved = cleanEmail === 'arshberi01@gmail.com' || cleanEmail === 'admin@recoverai.io';
+    const isPreApproved = !!PRIMARY_ACCOUNTS[cleanEmail];
 
     if (!userAcc && !isPreApproved) {
       setLoading(false);
