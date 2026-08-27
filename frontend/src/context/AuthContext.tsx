@@ -157,30 +157,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: { message: "An account with this email already exists. Please Sign In." } };
     }
 
-    // 2. Save user locally & update UI INSTANTLY (< 50ms response)!
-    saveRegisteredUser(cleanEmail, pass, name);
-    const u = {
-      id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
-      email: cleanEmail,
-      name: name || cleanEmail.split('@')[0],
-      role: 'Merchant Account'
-    };
-    setUser(u);
-    localStorage.setItem('recoverai_user_email', u.email);
-    setLoading(false);
+    try {
+      // 2. Execute profile persistence & welcome email dispatch FIRST before unmounting UI
+      await registerMerchantProfile(cleanEmail, name);
+      await sendWelcomeEmail(cleanEmail, name);
 
-    // 3. Dispatch Supabase auth, profile persistence, and email notification in background
-    Promise.allSettled([
+      // 3. Save user locally & log in
+      saveRegisteredUser(cleanEmail, pass, name);
+      const u = {
+        id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+        email: cleanEmail,
+        name: name || cleanEmail.split('@')[0],
+        role: 'Merchant Account'
+      };
+      setUser(u);
+      localStorage.setItem('recoverai_user_email', u.email);
+
+      // 4. Background Supabase Auth sync
       supabase.auth.signUp({
         email: cleanEmail,
         password: pass,
         options: { data: { full_name: name } }
-      }),
-      registerMerchantProfile(cleanEmail, name),
-      sendWelcomeEmail(cleanEmail, name)
-    ]).catch(() => {});
+      }).catch(() => {});
 
-    return { error: null, data: { user: u } };
+      setLoading(false);
+      return { error: null, data: { user: u } };
+    } catch (err) {
+      saveRegisteredUser(cleanEmail, pass, name);
+      const u = {
+        id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+        email: cleanEmail,
+        name: name || cleanEmail.split('@')[0],
+        role: 'Merchant Account'
+      };
+      setUser(u);
+      localStorage.setItem('recoverai_user_email', u.email);
+      setLoading(false);
+      return { error: null };
+    }
   };
 
   const verifyOtp = async (email: string, token: string) => {
