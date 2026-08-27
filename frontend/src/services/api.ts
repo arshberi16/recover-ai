@@ -352,3 +352,17 @@ export async function registerMerchantProfile(email: string, full_name: string):
     return { success: false };
   }
 }
+
+export async function sendWelcomeEmail(email: string, name: string): Promise<{ success: boolean }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/actions/send-welcome`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name })
+    });
+    if (!res.ok) return { success: false };
+    return await res.json();
+  } catch (e) {
+    return { success: false };
+  }
+}

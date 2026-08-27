@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
-import { clearApiCache, registerMerchantProfile } from '../services/api';
+import { clearApiCache, registerMerchantProfile, sendWelcomeEmail } from '../services/api';
 
 interface AuthUser {
   id: string;
@@ -140,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = email.toLowerCase().trim();
 
     try {
-      // Trigger official Supabase Auth Email OTP signup
+      // Trigger official Supabase Auth signup
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password: pass,
@@ -160,11 +160,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       saveRegisteredUser(cleanEmail, pass, name);
       registerMerchantProfile(cleanEmail, name);
+      sendWelcomeEmail(cleanEmail, name);
+
+      const u = {
+        id: data?.user?.id || `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+        email: cleanEmail,
+        name: name || cleanEmail.split('@')[0],
+        role: 'Merchant Account'
+      };
+      setUser(u);
+      localStorage.setItem('recoverai_user_email', u.email);
+
       setLoading(false);
       return { error: null, data };
     } catch (err) {
       saveRegisteredUser(cleanEmail, pass, name);
       registerMerchantProfile(cleanEmail, name);
+      sendWelcomeEmail(cleanEmail, name);
+
+      const u = {
+        id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+        email: cleanEmail,
+        name: name || cleanEmail.split('@')[0],
+        role: 'Merchant Account'
+      };
+      setUser(u);
+      localStorage.setItem('recoverai_user_email', u.email);
+
       setLoading(false);
       return { error: null };
     }

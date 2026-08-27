@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Transaction, RecoveryAction, RecoveryPrediction, PaymentAttempt
 from app.schemas import ActionRequest, ActionResponse
-from app.services.email_service import send_recovery_email, send_receipt_confirmation_email, send_otp_email
+from app.services.email_service import send_recovery_email, send_receipt_confirmation_email, send_otp_email, send_welcome_email
 from app.services.gateway_adapter import sandbox_gateway
 from pydantic import BaseModel, EmailStr
 
@@ -17,6 +17,10 @@ class OTPRequest(BaseModel):
     name: str
     otp_code: str
 
+class WelcomeRequest(BaseModel):
+    email: str
+    name: str
+
 @router.post("/send-otp")
 def send_otp_verification(req: OTPRequest):
     """
@@ -24,6 +28,14 @@ def send_otp_verification(req: OTPRequest):
     """
     res = send_otp_email(req.email, req.name, req.otp_code)
     return {"success": True, "email": req.email, "otp_sent": True, "detail": res}
+
+@router.post("/send-welcome")
+def send_welcome_confirmation(req: WelcomeRequest):
+    """
+    Dispatches account creation confirmation email for new merchant signup.
+    """
+    res = send_welcome_email(req.email, req.name)
+    return {"success": True, "email": req.email, "email_sent": True, "detail": res}
 
 def is_valid_uuid(val: str) -> bool:
     try:
