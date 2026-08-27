@@ -18,12 +18,12 @@ def send_recovery_email(
     For Resend API/SMTP, from address uses onboarding@resend.dev for test deliverability.
     """
     resend_api_key = os.getenv("RESEND_API_KEY")
-    smtp_host = os.getenv("SMTP_HOST", "smtp.resend.com")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = os.getenv("SMTP_PORT", "587")
-    smtp_user = os.getenv("SMTP_USER", "resend")
-    smtp_pass = os.getenv("SMTP_PASSWORD") or resend_api_key
+    smtp_user = os.getenv("SMTP_USER", "recoveryai1909@gmail.com")
+    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or "mgvegyphvywjuclw"
 
-    from_sender = "RecoverAI Engine <onboarding@resend.dev>"
+    from_sender = f"RecoverAI Engine <{smtp_user}>"
 
     subject = f"Action Required: Complete Your Payment of ₹{amount:,.0f} for {transaction_id}"
     pay_link = f"http://localhost:5173/pay?txn={transaction_id}"
@@ -92,12 +92,12 @@ def send_receipt_confirmation_email(
     Dispatches a Payment Confirmation Receipt email after a successful payment recovery.
     """
     resend_api_key = os.getenv("RESEND_API_KEY")
-    smtp_host = os.getenv("SMTP_HOST", "smtp.resend.com")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = os.getenv("SMTP_PORT", "587")
-    smtp_user = os.getenv("SMTP_USER", "resend")
-    smtp_pass = os.getenv("SMTP_PASSWORD") or resend_api_key
+    smtp_user = os.getenv("SMTP_USER", "recoveryai1909@gmail.com")
+    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or "mgvegyphvywjuclw"
 
-    from_sender = "RecoverAI Engine <onboarding@resend.dev>"
+    from_sender = f"RecoverAI Engine <{smtp_user}>"
     subject = f"Payment Confirmed: Receipt {receipt_number} for ₹{amount:,.0f}"
 
     html_content = f"""
@@ -273,12 +273,12 @@ def send_welcome_email(to_email: str, customer_name: str) -> dict:
     Sends directly to whichever email address the new user registered with!
     """
     resend_api_key = os.getenv("RESEND_API_KEY")
-    smtp_host = os.getenv("SMTP_HOST", "smtp.resend.com")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = os.getenv("SMTP_PORT", "587")
-    smtp_user = os.getenv("SMTP_USER", "resend")
-    smtp_pass = os.getenv("SMTP_PASSWORD") or resend_api_key
+    smtp_user = os.getenv("SMTP_USER", "recoveryai1909@gmail.com")
+    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or "mgvegyphvywjuclw"
 
-    from_sender = "RecoverAI Engine <onboarding@resend.dev>"
+    from_sender = f"RecoverAI Engine <{smtp_user}>"
     subject = f"Welcome to RecoverAI, {customer_name}! Account Created Successfully 🎉"
 
     html_content = f"""
