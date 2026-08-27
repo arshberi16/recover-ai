@@ -68,6 +68,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateTab, onS
   useEffect(() => {
     let isMounted = true;
     
+    // Max 800ms safety timeout guarantees dashboard renders instantly without stuck skeletons
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) setLoading(false);
+    }, 800);
+
     // Core stats load concurrently and update UI instantly
     fetchKPISummary().then(data => {
       if (isMounted) {
@@ -86,7 +91,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigateTab, onS
     // AI Insights stream asynchronously without blocking KPI cards
     fetchBusinessInsights().then(data => isMounted && setInsights(data)).catch(() => {});
 
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
   const handleQuickRetry = async (e: React.MouseEvent, txnId: string) => {
