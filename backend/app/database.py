@@ -14,6 +14,11 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./recoverai.db")
 if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# Automatically switch Supabase Session Pooler (port 5432) to Transaction Pooler (port 6543)
+# to prevent (EMAXCONNSESSION) max clients limit on Render!
+if "pooler.supabase.com:5432" in SQLALCHEMY_DATABASE_URL:
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543")
+
 engine_kwargs = {}
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
