@@ -150,8 +150,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearApiCache();
     const cleanEmail = email.toLowerCase().trim();
 
+    // 1. Block duplicate registrations if email already exists in system registry
+    const registered = getRegisteredUsers();
+    if (registered[cleanEmail]) {
+      setLoading(false);
+      return { error: { message: "An account with this email already exists. Please Sign In." } };
+    }
+
     try {
-      // Trigger official Supabase Auth signup
+      // 2. Trigger Supabase Auth signup
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password: pass,
@@ -160,7 +167,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
       
-      // Only return duplicate error if Supabase explicitly confirms user already exists
       if (error) {
         const msg = error.message.toLowerCase();
         if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('user_already_exists')) {
@@ -170,8 +176,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       saveRegisteredUser(cleanEmail, pass, name);
-      registerMerchantProfile(cleanEmail, name);
-      sendWelcomeEmail(cleanEmail, name);
+      await registerMerchantProfile(cleanEmail, name);
+      await sendWelcomeEmail(cleanEmail, name);
 
       const u = {
         id: data?.user?.id || `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
@@ -186,8 +192,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: null, data };
     } catch (err) {
       saveRegisteredUser(cleanEmail, pass, name);
-      registerMerchantProfile(cleanEmail, name);
-      sendWelcomeEmail(cleanEmail, name);
+      await registerMerchantProfile(cleanEmail, name);
+      await sendWelcomeEmail(cleanEmail, name);
 
       const u = {
         id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
