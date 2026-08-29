@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Transaction, Customer, RecoveryPrediction
 from app.ml_model import ml_engine
+from app.services.gemini_service import parse_pdf_with_gemini_ai
 
 router = APIRouter(prefix="/api/ingest", tags=["Payment Gateway Ingestion Architecture"])
 
@@ -245,6 +246,9 @@ def upload_and_parse_file(
     extracted_records = []
 
     # 1. Try parsing PDF file using pypdf
+    user_clean = user_email.strip().lower() if user_email and user_email.strip() else None
+
+    # 1. Try parsing PDF file using Gemini AI + pypdf
     if filename.endswith(".pdf") or content_bytes.startswith(b"%PDF"):
         try:
             pdf_file = io.BytesIO(content_bytes)
@@ -253,46 +257,51 @@ def upload_and_parse_file(
             for page in reader.pages:
                 full_text += (page.extract_text() or "") + "\n"
 
-            pattern = r"(TXN-\d+)\s+([A-Za-z\s]+?)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s+[■₹]?([\d,]+)\s+(Debit Card|Credit Card|UPI|Net Banking|Wallet)\s+(Bank Decline|Bank Timeout|Insufficient Funds|Network Error|Card Expired)\s+(\d{2}/\d{2}/\d{4},\s*\d{2}:\d{2}\s*(?:AM|PM)?)"
-            matches = re.findall(pattern, full_text)
+            # Attempt Gemini AI extraction first
+            ai_records = parse_pdf_with_gemini_ai(full_text)
+            if ai_records and len(ai_records) > 0:
+                extracted_records = ai_records
+            else:
+                pattern = r"(TXN-\d+)\s+([A-Za-z\s]+?)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s+[■₹]?([\d,]+)\s+(Debit Card|Credit Card|UPI|Net Banking|Wallet)\s+(Bank Decline|Bank Timeout|Insufficient Funds|Network Error|Card Expired)\s+(\d{2}/\d{2}/\d{4},\s*\d{2}:\d{2}\s*(?:AM|PM)?)"
+                matches = re.findall(pattern, full_text)
 
-            for m in matches:
-                txn_id, name, email, amount_str, method, reason, date_str = m
-                clean_amount = float(amount_str.replace(",", ""))
+                for m in matches:
+                    txn_id, name, email, amount_str, method, reason, date_str = m
+                    clean_amount = float(amount_str.replace(",", ""))
 
-                iso_ts = None
-                try:
-                    dt_match = re.search(r"(\d{2})/(\d{2})/(\d{4}),?\s*(\d{2}):(\d{2})\s*(AM|PM)?", date_str, re.I)
-                    if dt_match:
-                        d, m_num, y, hr, mn, ampm = dt_match.groups()
-                        hr_num = int(hr)
-                        if ampm:
-                            if ampm.upper() == "PM" and hr_num < 12:
-                                hr_num += 12
-                            elif ampm.upper() == "AM" and hr_num == 12:
-                                hr_num = 0
-                        iso_ts = f"{y}-{m_num}-{d}T{hr_num:02d}:{mn}:00"
-                except Exception:
-                    pass
+                    iso_ts = None
+                    try:
+                        dt_match = re.search(r"(\d{2})/(\d{2})/(\d{4}),?\s*(\d{2}):(\d{2})\s*(AM|PM)?", date_str, re.I)
+                        if dt_match:
+                            d, m_num, y, hr, mn, ampm = dt_match.groups()
+                            hr_num = int(hr)
+                            if ampm:
+                                if ampm.upper() == "PM" and hr_num < 12:
+                                    hr_num += 12
+                                elif ampm.upper() == "AM" and hr_num == 12:
+                                    hr_num = 0
+                            iso_ts = f"{y}-{m_num}-{d}T{hr_num:02d}:{mn}:00"
+                    except Exception:
+                        pass
 
-                bank_map = {
-                    "Credit Card": "ICICI",
-                    "Debit Card": "SBI",
-                    "UPI": "HDFC",
-                    "Net Banking": "Axis",
-                    "Wallet": "Kotak"
-                }
+                    bank_map = {
+                        "Credit Card": "ICICI",
+                        "Debit Card": "SBI",
+                        "UPI": "HDFC",
+                        "Net Banking": "Axis",
+                        "Wallet": "Kotak"
+                    }
 
-                extracted_records.append({
-                    "transaction_id": clean_parsed_field(txn_id, ["transaction_id"]),
-                    "customer_name": clean_parsed_field(name, ["customer_name"]),
-                    "customer_email": clean_parsed_field(email, ["customer_email"]),
-                    "amount": clean_amount,
-                    "payment_method": clean_parsed_field(method, ["payment_method"]),
-                    "bank_name": bank_map.get(clean_parsed_field(method, ["payment_method"]), "HDFC"),
-                    "failure_reason": clean_parsed_field(reason, ["failure_reason"]),
-                    "transaction_timestamp": iso_ts or datetime.utcnow().isoformat()
-                })
+                    extracted_records.append({
+                        "transaction_id": clean_parsed_field(txn_id, ["transaction_id"]),
+                        "customer_name": clean_parsed_field(name, ["customer_name"]),
+                        "customer_email": clean_parsed_field(email, ["customer_email"]),
+                        "amount": clean_amount,
+                        "payment_method": clean_parsed_field(method, ["payment_method"]),
+                        "bank_name": bank_map.get(clean_parsed_field(method, ["payment_method"]), "HDFC"),
+                        "failure_reason": clean_parsed_field(reason, ["failure_reason"]),
+                        "transaction_timestamp": iso_ts or datetime.utcnow().isoformat()
+                    })
         except Exception as e:
             print("PDF parsing error:", e)
 
@@ -340,7 +349,7 @@ def upload_and_parse_file(
                 customer_code=f"CUST-{uuid.uuid4().hex[:6].upper()}",
                 name=c_name or c_email.split('@')[0],
                 email=c_email,
-                phone=user_email.strip().lower() if user_email and user_email.strip() else None,
+                phone=user_clean,
                 customer_segment="Regular",
                 historical_success_rate=85.0,
                 previous_failures=1
@@ -351,6 +360,11 @@ def upload_and_parse_file(
         else:
             if c_name and c_name != "Merchant Customer" and cust.name != c_name:
                 cust.name = c_name
+            if user_clean:
+                if not cust.phone:
+                    cust.phone = user_clean
+                elif user_clean not in (cust.phone or "").lower():
+                    cust.phone = f"{cust.phone},{user_clean}"
 
         ts = datetime.utcnow()
         if rec.get("transaction_timestamp"):

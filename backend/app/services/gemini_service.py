@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from google import genai
 from google.genai import types
 
@@ -16,6 +16,60 @@ def get_gemini_client():
     except Exception as e:
         print(f"Failed to initialize Gemini API client: {e}")
         return None
+
+
+def parse_pdf_with_gemini_ai(pdf_text: str) -> Optional[List[Dict[str, Any]]]:
+    """
+    Uses Gemini AI to parse and extract structured transaction records from raw PDF text.
+    Intelligently identifies all columns: transaction_id, customer_name, customer_email, amount, payment_method, bank_name, failure_reason, transaction_timestamp.
+    """
+    client = get_gemini_client()
+    if not client or not pdf_text or not pdf_text.strip():
+        return None
+
+    prompt = f"""
+Extract all transaction records from the following text document.
+Filter out all columns, table headers, and rows into structured JSON array of transaction objects.
+
+Required JSON format:
+[
+  {{
+    "transaction_id": "TXN-XXXXX",
+    "customer_name": "Full Name",
+    "customer_email": "email@domain.com",
+    "amount": 4999.0,
+    "payment_method": "UPI | Credit Card | Debit Card | Net Banking | Wallet",
+    "bank_name": "HDFC | ICICI | SBI | Axis | Kotak",
+    "failure_reason": "Bank Timeout | Insufficient Funds | Bank Decline | Network Error | Card Expired",
+    "transaction_timestamp": "YYYY-MM-DDTHH:MM:SS"
+  }}
+]
+
+TEXT DOCUMENT CONTENT:
+{pdf_text[:8000]}
+"""
+
+    for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+        try:
+            config = types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=3000,
+                response_mime_type="application/json"
+            )
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=config
+            )
+            data = json.loads(response.text.strip())
+            if isinstance(data, list) and len(data) > 0:
+                print(f"✓ Gemini AI successfully extracted {len(data)} transaction rows using model {model_name}!")
+                return data
+        except Exception as e:
+            print(f"Gemini model {model_name} extraction attempt failed: {e}")
+            continue
+
+    return None
 
 GEMINI_SYSTEM_INSTRUCTION = """
 You are RecoverAI — an intelligent Fintech AI Assistant & Financial Analyst.
