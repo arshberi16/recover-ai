@@ -38,7 +38,7 @@ const DEMO_USER: AuthUser = {
 const PRIMARY_ACCOUNTS: Record<string, { pass: string; name: string; role: string }> = {
   'admin@recoverai.io': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
   'admin@recover.ai': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
-  'arshberi01@gmail.com': { pass: 'pass123', name: 'arshberi01', role: 'Merchant Account' }
+  'merchant@recoverai.io': { pass: 'pass123', name: 'Merchant Ops', role: 'Merchant Account' }
 };
 
 const getRegisteredUsers = (): Record<string, { pass: string; name: string; role: string }> => {

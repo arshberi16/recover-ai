@@ -50,8 +50,8 @@ export const TransactionsPage: React.FC<TransactionsPageProps> = ({
   const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
   const [ingestForm, setIngestForm] = useState({
     transaction_id: `TXN-${Math.floor(100000 + Math.random() * 900000)}`,
-    customer_name: 'Arsh Beri',
-    customer_email: 'arshberi01@gmail.com',
+    customer_name: 'Alex Smith',
+    customer_email: 'alex.smith@example.com',
     amount: '4999',
     payment_method: 'UPI',
     bank_name: 'HDFC',
@@ -537,7 +537,7 @@ export const TransactionsPage: React.FC<TransactionsPageProps> = ({
       <ImportDataModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        userEmail={localStorage.getItem('recoverai_user_email') || 'arshberi01@gmail.com'}
+        userEmail={localStorage.getItem('recoverai_user_email') || 'admin@recoverai.io'}
         onImportSuccess={(msg) => {
           setToastMsg(msg);
           loadData();
@@ -591,7 +591,7 @@ export const TransactionsPage: React.FC<TransactionsPageProps> = ({
               <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="email"
-                placeholder="arshberi01@gmail.com"
+                placeholder="customer@example.com"
                 value={ingestForm.customer_email}
                 onChange={(e) => setIngestForm({ ...ingestForm, customer_email: e.target.value })}
                 required

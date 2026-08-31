@@ -57,7 +57,7 @@ export const CustomerPayPage: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   
   // Card Form State
-  const [cardForm, setCardForm] = useState({ number: '4111 •••• •••• 4242', exp: '12/28', cvv: '888', name: 'Arsh Beri' });
+  const [cardForm, setCardForm] = useState({ number: '4111 •••• •••• 4242', exp: '12/28', cvv: '888', name: 'Alex Smith' });
   const [otpCode, setOtpCode] = useState('849201');
 
   useEffect(() => {
@@ -105,7 +105,7 @@ export const CustomerPayPage: React.FC = () => {
           id: 'mock-1',
           transaction_id: id,
           customer_id: 'CUST-101',
-          customer: { name: 'Valued Customer', email: 'arshberi01@gmail.com' },
+          customer: { name: 'Valued Customer', email: 'customer@example.com' },
           amount: 4999,
           currency: 'INR',
           payment_method: 'UPI',

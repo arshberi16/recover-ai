@@ -166,8 +166,8 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
     setManualLoading(true);
     try {
       const sampleTxnId = `TXN-${Math.floor(100000 + Math.random() * 900000)}`;
-      const sampleName = 'Arsh Beri';
-      const sampleEmail = userEmail || 'arshberi01@gmail.com';
+      const sampleName = 'Alex Smith';
+      const sampleEmail = userEmail || 'customer@example.com';
       const sampleAmount = 4999;
 
       const finalTxnId = manualForm.transaction_id.trim() || sampleTxnId;
@@ -467,7 +467,7 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
                   type="email"
                   value={manualForm.customer_email}
                   onChange={(e) => setManualForm({ ...manualForm, customer_email: e.target.value })}
-                  placeholder="arshberi01@gmail.com"
+                  placeholder="customer@example.com"
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400/80 dark:placeholder:text-slate-500 font-medium"
                 />
               </div>
