@@ -37,7 +37,18 @@ export const TransactionDetailDrawer: React.FC<TransactionDetailDrawerProps> = (
   const handleAction = async (actionType: string) => {
     setLoadingAction(actionType);
     try {
-      const res = await executeRecoveryAction(transaction.transaction_id, actionType);
+      const res = await executeRecoveryAction(
+        transaction.transaction_id, 
+        actionType,
+        undefined,
+        {
+          email: transaction.customer?.email,
+          name: transaction.customer?.name,
+          amount: transaction.amount,
+          bank_name: (transaction as any).bank_name || (transaction as any).bank || 'HDFC Bank',
+          failure_reason: transaction.failure_reason
+        }
+      );
       setActionStatus(res.message);
       if (onActionComplete) onActionComplete();
     } catch (err: any) {

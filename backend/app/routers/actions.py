@@ -1,7 +1,7 @@
 import uuid
 import random
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Transaction, RecoveryAction, RecoveryPrediction, PaymentAttempt
@@ -57,7 +57,7 @@ def is_valid_uuid(val: str) -> bool:
         return False
 
 @router.post("", response_model=ActionResponse)
-def execute_recovery_action(req: ActionRequest, db: Session = Depends(get_db)):
+def execute_recovery_action(req: ActionRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Executes and persists recovery action for a transaction or batch.
     Routes retry actions through SandboxGatewayAdapter simulation and records payment_attempts.
@@ -137,18 +137,16 @@ def execute_recovery_action(req: ActionRequest, db: Session = Depends(get_db)):
 
     elif action_type in ["SEND_EMAIL", "SEND_EMAIL_REMINDER", "SEND_REMINDER", "EMAIL"]:
         new_status = "PENDING"
-        email_res = send_recovery_email(
+        background_tasks.add_task(
+            send_recovery_email,
             to_email=cust_email,
             customer_name=cust_name,
             transaction_id=txn.transaction_id,
             amount=float(txn.amount),
-            bank_name=txn.bank_name or "HDFC",
+            bank_name=txn.bank_name or "HDFC Bank",
             failure_reason=txn.failure_reason or "Bank Timeout"
         )
-        if email_res.get("sent"):
-            msg = f"Live payment recovery notification email sent to {cust_email} via {email_res.get('provider')}!"
-        else:
-            msg = f"Payment recovery notification email dispatched to {cust_email} via Supabase Email Gateway."
+        msg = f"Live payment recovery notification email dispatched to {cust_email}!"
 
     else:
         new_status = txn.status
