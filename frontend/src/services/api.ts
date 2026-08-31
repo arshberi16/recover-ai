@@ -42,6 +42,10 @@ function getCached<T>(key: string): T | null {
   return item.data as T;
 }
 
+export function getCachedValue<T>(key: string): T | null {
+  return getCached<T>(key);
+}
+
 function setCached(key: string, data: any): void {
   apiCache.set(key, { timestamp: Date.now(), data });
 }
@@ -234,7 +238,8 @@ export async function ingestTransaction(payload: {
   status?: string;
   transaction_timestamp?: string;
 }): Promise<{ success: boolean; message: string; transaction_id: string; ml_prediction?: any }> {
-  const res = await fetch(`${API_BASE_URL}/ingest/transaction`, {
+  const p = getUserEmailParam();
+  const res = await fetch(`${API_BASE_URL}/ingest/transaction?${p}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)

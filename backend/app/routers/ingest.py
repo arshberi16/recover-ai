@@ -106,6 +106,7 @@ def verify_webhook_hmac_signature(raw_body: str, signature: Optional[str], secre
 @router.post("/transaction", response_model=IngestResponse)
 def ingest_payment_gateway_transaction(
     payload: TransactionIngestPayload,
+    user_email: Optional[str] = Query(None),
     x_webhook_signature: Optional[str] = Header(default=None),
     x_razorpay_signature: Optional[str] = Header(default=None),
     db: Session = Depends(get_db)
@@ -125,6 +126,8 @@ def ingest_payment_gateway_transaction(
     p_method = clean_parsed_field(payload.payment_method, ["payment_method"])
     f_reason = clean_parsed_field(payload.failure_reason, ["failure_reason"])
 
+    user_clean = user_email.strip().lower() if user_email and user_email.strip() else None
+
     cust = db.query(Customer).filter(Customer.email == c_email).first()
     if not cust:
         cust = Customer(
@@ -132,6 +135,7 @@ def ingest_payment_gateway_transaction(
             customer_code=f"CUST-{uuid.uuid4().hex[:6].upper()}",
             name=c_name or c_email.split('@')[0],
             email=c_email,
+            phone=user_clean,
             customer_segment="Regular",
             historical_success_rate=85.0,
             previous_failures=1 if payload.status == "FAILED" else 0
@@ -142,8 +146,13 @@ def ingest_payment_gateway_transaction(
     else:
         if c_name and c_name != "Merchant Customer" and cust.name != c_name:
             cust.name = c_name
-            db.commit()
-            db.refresh(cust)
+        if user_clean:
+            if not cust.phone:
+                cust.phone = user_clean
+            elif user_clean not in (cust.phone or "").lower():
+                cust.phone = f"{cust.phone},{user_clean}"
+        db.commit()
+        db.refresh(cust)
 
     ts = datetime.utcnow()
     if payload.transaction_timestamp:

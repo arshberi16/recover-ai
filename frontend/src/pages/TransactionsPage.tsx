@@ -100,23 +100,31 @@ export const TransactionsPage: React.FC<TransactionsPageProps> = ({
   };
 
   const loadData = async () => {
-    setLoading(true);
-    const res = await fetchTransactions({
-      search,
-      payment_method: paymentMethod,
-      failure_reason: failureReason,
-      status,
-      priority_level: priorityLevel,
-      start_date: startDate,
-      end_date: endDate,
-      sort_by: sortBy,
-      sort_order: sortOrder,
-      page,
-      limit
-    });
-    setTransactions(res.items);
-    setTotalCount(res.total);
-    setLoading(false);
+    if (transactions.length === 0) {
+      setLoading(true);
+    }
+
+    try {
+      const res = await fetchTransactions({
+        search,
+        payment_method: paymentMethod,
+        failure_reason: failureReason,
+        status,
+        priority_level: priorityLevel,
+        start_date: startDate,
+        end_date: endDate,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        page,
+        limit
+      });
+      setTransactions(res.items || []);
+      setTotalCount(res.total || 0);
+    } catch (err) {
+      console.error("Failed to load transactions:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

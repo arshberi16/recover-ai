@@ -12,6 +12,7 @@ import {
   Globe,
   ArrowRight,
   Calendar,
+  Clock,
   Trash2
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
@@ -82,6 +83,9 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
   const [keyId, setKeyId] = useState('');
   const [keySecret, setKeySecret] = useState('');
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const nowTimeStr = new Date().toTimeString().slice(0, 5);
+
   // Manual Form State
   const [manualForm, setManualForm] = useState({
     transaction_id: '',
@@ -91,7 +95,8 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
     payment_method: 'UPI',
     bank_name: 'HDFC',
     failure_reason: 'Bank Timeout',
-    transaction_timestamp: ''
+    txn_date: todayStr,
+    txn_time: nowTimeStr
   });
 
   const webhookUrl = 'http://127.0.0.1:8000/api/ingest/transaction';
@@ -169,7 +174,25 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
       const finalName = manualForm.customer_name.trim() || sampleName;
       const finalEmail = manualForm.customer_email.trim() || sampleEmail;
       const finalAmount = manualForm.amount.trim() ? parseFloat(manualForm.amount) : sampleAmount;
-      const finalTimestamp = manualForm.transaction_timestamp ? new Date(manualForm.transaction_timestamp).toISOString() : new Date().toISOString();
+      
+      let finalTimestamp = new Date().toISOString();
+      if (manualForm.txn_date) {
+        try {
+          const timeParts = (manualForm.txn_time || '12:00').replace(/(AM|PM)/i, '').trim().split(':');
+          let hours = parseInt(timeParts[0] || '12', 10);
+          const minutes = parseInt(timeParts[1] || '00', 10);
+          if (/PM/i.test(manualForm.txn_time) && hours < 12) hours += 12;
+          if (/AM/i.test(manualForm.txn_time) && hours === 12) hours = 0;
+
+          const [y, m, d] = manualForm.txn_date.split('-').map(n => parseInt(n, 10));
+          if (y && m && d) {
+            const dt = new Date(y, m - 1, d, hours, minutes, 0);
+            if (!isNaN(dt.getTime())) {
+              finalTimestamp = dt.toISOString();
+            }
+          }
+        } catch (e) {}
+      }
 
       const res = await ingestTransaction({
         transaction_id: finalTxnId,
@@ -492,18 +515,33 @@ export const ImportDataModal: React.FC<ImportDataModalProps> = ({
             </div>
 
             {/* Transaction Date & Time Selector */}
-            <div>
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                Transaction Date & Time
-              </label>
-              <input
-                type="datetime-local"
-                value={manualForm.transaction_timestamp}
-                onChange={(e) => setManualForm({ ...manualForm, transaction_timestamp: e.target.value })}
-                required
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-medium"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                  Transaction Date
+                </label>
+                <input
+                  type="date"
+                  value={manualForm.txn_date}
+                  onChange={(e) => setManualForm({ ...manualForm, txn_date: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-medium"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-500" />
+                  Transaction Time
+                </label>
+                <input
+                  type="time"
+                  value={manualForm.txn_time}
+                  onChange={(e) => setManualForm({ ...manualForm, txn_time: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 font-medium"
+                />
+              </div>
             </div>
 
             <div className="pt-2 flex justify-end gap-2">

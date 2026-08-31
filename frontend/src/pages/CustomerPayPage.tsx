@@ -6,31 +6,84 @@ import {
   Lock, 
   CreditCard, 
   QrCode, 
-  Building2, 
   ArrowRight, 
   FileText,
-  RefreshCw
+  RefreshCw,
+  Smartphone
 } from 'lucide-react';
 import type { Transaction } from '../types';
 import { fetchTransactions, executeRecoveryAction } from '../services/api';
 import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
+
+const UPIQRCode: React.FC<{ amount: number; txnId: string }> = ({ amount, txnId }) => {
+  const upiPayload = `upi://pay?pa=recoverai.merchant@okicici&pn=TechCorp%20Solutions&am=${amount}.00&cu=INR&tn=Payment%20Recovery%20${txnId}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiPayload)}`;
+
+  return (
+    <div className="p-4 bg-white rounded-2xl flex flex-col items-center justify-center space-y-3 border border-slate-700 shadow-2xl max-w-[260px] mx-auto text-slate-900">
+      <div className="relative group p-1.5 bg-white rounded-xl border border-slate-200 shadow-sm">
+        <img 
+          src={qrCodeUrl} 
+          alt={`Scan to Pay ₹${amount}`}
+          className="w-48 h-48 object-contain rounded-lg" 
+        />
+      </div>
+      <div className="text-center space-y-1">
+        <div className="text-[11px] font-mono font-bold text-slate-900 flex items-center justify-center gap-1">
+          <span className="text-slate-500">Payee VPA:</span>
+          <span className="text-blue-600 font-extrabold">recoverai.merchant@okicici</span>
+        </div>
+        <div className="text-[11px] font-extrabold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-300 inline-block">
+          Scan to Pay ₹{amount.toLocaleString('en-IN')}
+        </div>
+      </div>
+      <div className="text-[9px] text-slate-500 font-semibold text-center leading-tight">
+        ⚡ NPCI Compliant Real UPI QR • Scannable by GPay, PhonePe, Paytm & Camera
+      </div>
+    </div>
+  );
+};
 
 export const CustomerPayPage: React.FC = () => {
-  const [txnId, setTxnId] = useState<string | null>(null);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
+  const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card'>('upi');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Modal prompt states
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  
+  // Card Form State
+  const [cardForm, setCardForm] = useState({ number: '4111 •••• •••• 4242', exp: '12/28', cvv: '888', name: 'Arsh Beri' });
+  const [otpCode, setOtpCode] = useState('849201');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('txn') || params.get('transaction_id');
-    setTxnId(id);
 
     if (id) {
       loadTxn(id);
+
+      // Real-time Status Synchronization Polling (every 2.5s)
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetchTransactions({ search: id, limit: 1 });
+          if (res.items && res.items.length > 0) {
+            const currentTxn = res.items[0];
+            const s = String(currentTxn.status).toUpperCase();
+            if (s === 'COMPLETED' || s === 'RECOVERED' || s === 'SUCCESS') {
+              setTransaction(currentTxn);
+              setPaymentSuccess(true);
+              clearInterval(interval);
+            }
+          }
+        } catch (e) {}
+      }, 2500);
+
+      return () => clearInterval(interval);
     } else {
       setLoading(false);
     }
@@ -41,9 +94,13 @@ export const CustomerPayPage: React.FC = () => {
     try {
       const res = await fetchTransactions({ search: id, limit: 1 });
       if (res.items && res.items.length > 0) {
-        setTransaction(res.items[0]);
+        const txn = res.items[0];
+        setTransaction(txn);
+        const s = String(txn.status).toUpperCase();
+        if (s === 'COMPLETED' || s === 'RECOVERED' || s === 'SUCCESS') {
+          setPaymentSuccess(true);
+        }
       } else {
-        // Fallback mock
         setTransaction({
           id: 'mock-1',
           transaction_id: id,
@@ -66,8 +123,9 @@ export const CustomerPayPage: React.FC = () => {
     }
   };
 
-  const handlePayNow = async () => {
+  const executePayNow = async () => {
     if (!transaction) return;
+    setShowAuthModal(false);
     setProcessing(true);
     try {
       await executeRecoveryAction(transaction.transaction_id, 'RETRY_PAYMENT', 'Customer completed quick-pay link');
@@ -81,7 +139,6 @@ export const CustomerPayPage: React.FC = () => {
 
   return (
     <div className="dark min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 font-sans selection:bg-blue-500 selection:text-white">
-      {/* Ambient background glow */}
       <div className="fixed top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/15 rounded-full blur-[120px] pointer-events-none"></div>
 
       <div className="w-full max-w-lg space-y-6 relative z-10">
@@ -183,15 +240,15 @@ export const CustomerPayPage: React.FC = () => {
             </div>
 
             {/* Payment Method Rail Options */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <label className="block text-xs font-bold text-slate-300">Select Payment Rail</label>
               
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 gap-3">
                 {/* Instant UPI */}
                 <button
                   type="button"
                   onClick={() => setSelectedMethod('upi')}
-                  className={`p-3.5 rounded-2xl text-left space-y-1.5 transition-all ${
+                  className={`p-4 rounded-2xl text-left space-y-1.5 transition-all ${
                     selectedMethod === 'upi'
                       ? 'border-2 border-blue-500 bg-blue-600/20 text-white shadow-md shadow-blue-500/10'
                       : 'border border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800/50'
@@ -199,39 +256,71 @@ export const CustomerPayPage: React.FC = () => {
                 >
                   <QrCode className={`w-5 h-5 ${selectedMethod === 'upi' ? 'text-blue-400' : 'text-slate-400'}`} />
                   <div className="text-xs font-bold text-white">Instant UPI</div>
-                  <div className="text-[10px] text-slate-400">GPay, PhonePe</div>
+                  <div className="text-[10px] text-slate-400">GPay, PhonePe, Paytm</div>
                 </button>
 
                 {/* Cards */}
                 <button
                   type="button"
                   onClick={() => setSelectedMethod('card')}
-                  className={`p-3.5 rounded-2xl text-left space-y-1.5 transition-all ${
+                  className={`p-4 rounded-2xl text-left space-y-1.5 transition-all ${
                     selectedMethod === 'card'
                       ? 'border-2 border-blue-500 bg-blue-600/20 text-white shadow-md shadow-blue-500/10'
                       : 'border border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800/50'
                   }`}
                 >
                   <CreditCard className={`w-5 h-5 ${selectedMethod === 'card' ? 'text-blue-400' : 'text-slate-400'}`} />
-                  <div className="text-xs font-bold text-white">Cards</div>
-                  <div className="text-[10px] text-slate-400">Visa, Mastercard</div>
-                </button>
-
-                {/* Net Banking */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedMethod('netbanking')}
-                  className={`p-3.5 rounded-2xl text-left space-y-1.5 transition-all ${
-                    selectedMethod === 'netbanking'
-                      ? 'border-2 border-blue-500 bg-blue-600/20 text-white shadow-md shadow-blue-500/10'
-                      : 'border border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800/50'
-                  }`}
-                >
-                  <Building2 className={`w-5 h-5 ${selectedMethod === 'netbanking' ? 'text-blue-400' : 'text-slate-400'}`} />
-                  <div className="text-xs font-bold text-white">Net Banking</div>
-                  <div className="text-[10px] text-slate-400">HDFC, SBI, ICICI</div>
+                  <div className="text-xs font-bold text-white">Credit / Debit Cards</div>
+                  <div className="text-[10px] text-slate-400">Visa, Mastercard, RuPay</div>
                 </button>
               </div>
+
+              {/* DYNAMIC METHOD DETAILS VIEW */}
+              {selectedMethod === 'upi' && (
+                <div className="p-4 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-4 animate-in fade-in duration-200">
+                  <div className="text-center space-y-1">
+                    <div className="text-xs font-bold text-slate-200">Scan QR Code using any UPI App</div>
+                    <div className="text-[11px] text-slate-400">Google Pay, PhonePe, Paytm, BHIM or iPhone Camera</div>
+                  </div>
+                  
+                  <UPIQRCode amount={transaction.amount} txnId={transaction.transaction_id} />
+                </div>
+              )}
+
+              {selectedMethod === 'card' && (
+                <div className="p-4 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-3 animate-in fade-in duration-200 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 mb-1">Card Number</label>
+                    <input
+                      type="text"
+                      value={cardForm.number}
+                      onChange={(e) => setCardForm({ ...cardForm, number: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg font-mono text-white font-bold"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 mb-1">Expiry (MM/YY)</label>
+                      <input
+                        type="text"
+                        value={cardForm.exp}
+                        onChange={(e) => setCardForm({ ...cardForm, exp: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg font-mono text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-400 mb-1">CVV Code</label>
+                      <input
+                        type="password"
+                        maxLength={3}
+                        value={cardForm.cvv}
+                        onChange={(e) => setCardForm({ ...cardForm, cvv: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg font-mono text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {errorMsg && (
@@ -240,32 +329,89 @@ export const CustomerPayPage: React.FC = () => {
               </div>
             )}
 
-            {/* Pay Now Button */}
+            {/* Pay Now Trigger Button */}
             <Button
               variant="primary"
               className="w-full justify-center py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-600/30 transition-all"
               loading={processing}
               icon={<ArrowRight className="w-4 h-4" />}
-              onClick={handlePayNow}
+              onClick={() => setShowAuthModal(true)}
             >
-              Pay ₹{transaction.amount.toLocaleString('en-IN')} Now (1-Click Retry)
+              {selectedMethod === 'upi' && `Simulate Mobile QR Scan & Pay ₹${transaction.amount.toLocaleString('en-IN')}`}
+              {selectedMethod === 'card' && `Pay ₹${transaction.amount.toLocaleString('en-IN')} via Card`}
             </Button>
 
-            <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500 pt-1">
-              <Lock className="w-3.5 h-3.5 text-slate-400" />
-              <span>Secured by RecoverAI Payment Mesh • PCI-DSS Compliant</span>
+            <div className="text-center text-[11px] text-slate-500 flex items-center justify-center gap-1.5">
+              <Lock className="w-3 h-3 text-slate-400" />
+              Secured by RecoverAI Payment Mesh • PCI-DSS Compliant
             </div>
           </div>
-        ) : (
-          <div className="p-8 text-center space-y-4 bg-slate-900/90 border border-slate-800 rounded-3xl shadow-2xl">
-            <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
-            <div className="space-y-1">
-              <h2 className="text-base font-bold text-white">Invalid or Expired Payment Link</h2>
-              <p className="text-xs text-slate-400">No active transaction ref was found for "{txnId}".</p>
-            </div>
-          </div>
-        )}
+        ) : null}
       </div>
+
+      {/* INTERACTIVE PAYMENT AUTHORIZATION PROMPT MODAL */}
+      <Modal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        title={
+          selectedMethod === 'upi'
+            ? 'Authorize Mobile UPI Payment'
+            : '3D-Secure Card Verification'
+        }
+      >
+        <div className="space-y-4 p-1 text-xs">
+          {selectedMethod === 'upi' && (
+            <div className="space-y-3">
+              <div className="p-3.5 bg-blue-950/50 border border-blue-800/60 rounded-2xl flex items-center gap-3">
+                <Smartphone className="w-6 h-6 text-blue-400 shrink-0" />
+                <div>
+                  <div className="font-bold text-blue-200 text-sm">UPI Payment Prompt Received</div>
+                  <div className="text-[11px] text-slate-300">Authorize payment of <strong className="text-emerald-400 font-mono">₹{transaction?.amount.toLocaleString('en-IN')}</strong> to <strong>TechCorp Solutions Pvt Ltd</strong>?</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedMethod === 'card' && (
+            <div className="space-y-3">
+              <div className="p-3 bg-slate-900 border border-slate-700 rounded-xl space-y-1 font-mono text-[11px]">
+                <div className="text-slate-400">Card: <span className="text-white font-bold">{cardForm.number}</span></div>
+                <div className="text-slate-400">Amount: <span className="text-emerald-400 font-bold">₹{transaction?.amount.toLocaleString('en-IN')}</span></div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Enter 6-Digit Bank OTP (Sent to mobile)</label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center font-mono font-bold text-base tracking-widest text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <Button
+              variant="outline"
+              onClick={() => setShowAuthModal(false)}
+              className="text-xs font-bold border-slate-700 hover:bg-slate-800 text-slate-300"
+            >
+              Cancel / Decline
+            </Button>
+
+            <Button
+              onClick={executePayNow}
+              disabled={processing}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+              icon={<CheckCircle2 className="w-4 h-4" />}
+            >
+              {processing ? 'Processing Payment...' : `Authorize & Pay ₹${transaction?.amount.toLocaleString('en-IN')}`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
