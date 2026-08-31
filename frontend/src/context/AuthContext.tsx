@@ -48,9 +48,7 @@ const getRegisteredUsers = (): Record<string, { pass: string; name: string; role
       const parsed = JSON.parse(raw);
       const clean: Record<string, { pass: string; name: string; role: string }> = { ...PRIMARY_ACCOUNTS };
       for (const k in parsed) {
-        if (PRIMARY_ACCOUNTS[k]) {
-          clean[k] = parsed[k];
-        }
+        clean[k] = parsed[k];
       }
       return clean;
     }

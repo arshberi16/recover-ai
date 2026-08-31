@@ -158,7 +158,7 @@ def _dispatch_email(to_email, subject, html_content, from_sender, resend_api_key
             msg["To"] = to_email
             msg.attach(MIMEText(html_content, "html"))
 
-            with smtplib.SMTP(smtp_host, int(smtp_port)) as server:
+            with smtplib.SMTP(smtp_host, int(smtp_port), timeout=4) as server:
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(smtp_user, to_email, msg.as_string())
@@ -199,7 +199,7 @@ def _dispatch_email(to_email, subject, html_content, from_sender, resend_api_key
             msg["To"] = to_email
             msg.attach(MIMEText(html_content, "html"))
 
-            with smtplib.SMTP(smtp_host, int(smtp_port)) as server:
+            with smtplib.SMTP(smtp_host, int(smtp_port), timeout=4) as server:
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.sendmail("onboarding@resend.dev", to_email, msg.as_string())

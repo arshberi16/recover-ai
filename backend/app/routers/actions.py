@@ -135,7 +135,7 @@ def execute_recovery_action(req: ActionRequest, db: Session = Depends(get_db)):
         new_status = "LOST"
         msg = f"Transaction {txn.transaction_id} marked as LOST."
 
-    elif action_type in ["SEND_EMAIL_REMINDER", "SEND_REMINDER"]:
+    elif action_type in ["SEND_EMAIL", "SEND_EMAIL_REMINDER", "SEND_REMINDER", "EMAIL"]:
         new_status = "PENDING"
         email_res = send_recovery_email(
             to_email=cust_email,

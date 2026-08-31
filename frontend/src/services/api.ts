@@ -215,7 +215,32 @@ export async function fetchRecoveryQueue(priority?: string): Promise<Transaction
   return data;
 }
 
-export async function executeRecoveryAction(transaction_id: string, action_type: string, notes?: string): Promise<{ success: boolean; message: string }> {
+export async function executeRecoveryAction(
+  transaction_id: string, 
+  action_type: string, 
+  notes?: string,
+  extraData?: { email?: string; name?: string; amount?: number; bank_name?: string; failure_reason?: string }
+): Promise<{ success: boolean; message: string }> {
+  const cleanAction = action_type.toUpperCase();
+  if (cleanAction.includes('EMAIL') || cleanAction.includes('REMINDER')) {
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+      try {
+        fetch('/api/send-recovery', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction_id,
+            email: extraData?.email || 'customer@example.com',
+            name: extraData?.name || 'Valued Customer',
+            amount: extraData?.amount || 4999,
+            bank_name: extraData?.bank_name || 'HDFC Bank',
+            failure_reason: extraData?.failure_reason || 'Bank Timeout'
+          })
+        }).catch(() => {});
+      } catch (e) {}
+    }
+  }
+
   const res = await fetch(`${API_BASE_URL}/actions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
