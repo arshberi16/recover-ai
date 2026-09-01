@@ -26,7 +26,7 @@ def send_recovery_email(
     from_sender = f"RecoverAI Engine <{smtp_user}>"
 
     subject = f"Action Required: Complete Your Payment of ₹{amount:,.0f} for {transaction_id}"
-    pay_link = f"http://localhost:5173/pay?txn={transaction_id}"
+    pay_link = f"https://recover-ai-gilt.vercel.app/pay?txn={transaction_id}"
     
     html_content = f"""
     <!DOCTYPE html>
