@@ -53,6 +53,10 @@ export const CustomerPayPage: React.FC = () => {
   const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card'>('upi');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Email & Receipt states
+  const [receiptEmail, setReceiptEmail] = useState<string>('');
+  const [receiptNumber, setReceiptNumber] = useState<string>('');
+
   // Modal prompt states
   const [showAuthModal, setShowAuthModal] = useState(false);
   
@@ -63,6 +67,13 @@ export const CustomerPayPage: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('txn') || params.get('transaction_id');
+    const paramEmail = params.get('email');
+    const savedUserEmail = localStorage.getItem('recoverai_user_email');
+    if (paramEmail) {
+      setReceiptEmail(paramEmail);
+    } else if (savedUserEmail) {
+      setReceiptEmail(savedUserEmail);
+    }
 
     if (id) {
       loadTxn(id);
@@ -91,21 +102,27 @@ export const CustomerPayPage: React.FC = () => {
 
   const loadTxn = async (id: string) => {
     setLoading(true);
+    const params = new URLSearchParams(window.location.search);
+    const paramEmail = params.get('email');
     try {
       const res = await fetchTransactions({ search: id, limit: 1 });
       if (res.items && res.items.length > 0) {
         const txn = res.items[0];
         setTransaction(txn);
+        const resolvedEmail = paramEmail || (txn.customer?.email !== 'customer@example.com' ? txn.customer?.email : null) || localStorage.getItem('recoverai_user_email') || 'customer@example.com';
+        setReceiptEmail(resolvedEmail);
         const s = String(txn.status).toUpperCase();
         if (s === 'COMPLETED' || s === 'RECOVERED' || s === 'SUCCESS') {
           setPaymentSuccess(true);
         }
       } else {
+        const fallbackEmail = paramEmail || localStorage.getItem('recoverai_user_email') || 'customer@example.com';
+        setReceiptEmail(fallbackEmail);
         setTransaction({
           id: 'mock-1',
           transaction_id: id,
           customer_id: 'CUST-101',
-          customer: { name: 'Valued Customer', email: 'customer@example.com' },
+          customer: { name: 'Valued Customer', email: fallbackEmail },
           amount: 4999,
           currency: 'INR',
           payment_method: 'UPI',
@@ -127,8 +144,39 @@ export const CustomerPayPage: React.FC = () => {
     if (!transaction) return;
     setShowAuthModal(false);
     setProcessing(true);
+
+    const targetEmail = receiptEmail || transaction.customer?.email || localStorage.getItem('recoverai_user_email') || 'customer@example.com';
+    const generatedReceiptNum = receiptNumber || `REC-${Math.floor(100000 + Math.random() * 900000)}`;
+    setReceiptNumber(generatedReceiptNum);
+
     try {
-      await executeRecoveryAction(transaction.transaction_id, 'RETRY_PAYMENT', 'Customer completed quick-pay link');
+      // 1. Dispatch Vercel Serverless Payment Receipt Email instantly in parallel
+      if (typeof window !== 'undefined') {
+        fetch('/api/send-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: targetEmail,
+            name: transaction.customer?.name || 'Valued Customer',
+            transaction_id: transaction.transaction_id,
+            amount: transaction.amount,
+            receipt_number: generatedReceiptNum
+          })
+        }).catch(() => {});
+      }
+
+      await executeRecoveryAction(
+        transaction.transaction_id, 
+        'RETRY_PAYMENT', 
+        'Customer completed quick-pay link',
+        {
+          email: targetEmail,
+          name: transaction.customer?.name || 'Valued Customer',
+          amount: transaction.amount,
+          bank_name: (transaction as any).bank_name || (transaction as any).bank || 'HDFC Bank',
+          failure_reason: transaction.failure_reason
+        }
+      );
       setPaymentSuccess(true);
     } catch (err: any) {
       setErrorMsg(`Payment processing failed: ${err.message}`);
@@ -179,7 +227,7 @@ export const CustomerPayPage: React.FC = () => {
             <div className="p-4 bg-slate-950/90 rounded-2xl border border-slate-800 text-left text-xs space-y-2 font-mono shadow-inner">
               <div className="flex justify-between text-slate-400">
                 <span>Receipt Number:</span>
-                <span className="text-white font-bold">REC-{Math.floor(100000 + Math.random() * 900000)}</span>
+                <span className="text-white font-bold">{receiptNumber || 'REC-879311'}</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Transaction ID:</span>
@@ -197,7 +245,7 @@ export const CustomerPayPage: React.FC = () => {
 
             <div className="p-3 bg-emerald-950/40 border border-emerald-800/40 rounded-xl text-[11px] text-emerald-300 flex items-center gap-2">
               <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>A confirmation receipt has been dispatched to {transaction?.customer?.email || 'your email'}.</span>
+              <span>A confirmation receipt has been dispatched to {receiptEmail || transaction?.customer?.email || 'your email'}.</span>
             </div>
 
             <Button
