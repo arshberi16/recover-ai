@@ -19,13 +19,15 @@ export default async function handler(req, res) {
   }
 
   const { email, name, transaction_id, amount, bank_name, failure_reason } = req.body || {};
-  if (!email || !transaction_id) {
-    return res.status(400).json({ error: 'Email and transaction_id are required' });
+  const cleanEmail = String(email || '').toLowerCase().trim();
+
+  if (!cleanEmail || !transaction_id) {
+    return res.status(400).json({ error: 'Valid Email and transaction_id are required' });
   }
 
-  const recipientName = name || email.split('@')[0];
+  const recipientName = name || cleanEmail.split('@')[0];
   const formattedAmount = amount ? Number(amount).toLocaleString('en-IN') : '4,999';
-  const payLink = `https://recover-ai-gilt.vercel.app/pay?txn=${transaction_id}`;
+  const payLink = `https://recover-ai-gilt.vercel.app/pay?txn=${encodeURIComponent(transaction_id)}&email=${encodeURIComponent(cleanEmail)}`;
 
   try {
     const transporter = nodemailer.createTransport({
@@ -90,12 +92,13 @@ export default async function handler(req, res) {
 
     const info = await transporter.sendMail({
       from: '"RecoverAI Engine" <recoveryai1909@gmail.com>',
-      to: email,
+      replyTo: 'recoveryai1909@gmail.com',
+      to: cleanEmail,
       subject: `Action Required: Complete Your Payment of ₹${formattedAmount} for ${transaction_id}`,
       html: htmlContent
     });
 
-    return res.status(200).json({ success: true, messageId: info.messageId, email });
+    return res.status(200).json({ success: true, messageId: info.messageId, email: cleanEmail });
   } catch (error) {
     console.error('Error dispatching recovery email:', error);
     return res.status(500).json({ error: 'Failed to send recovery email', details: error.message });

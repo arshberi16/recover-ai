@@ -21,7 +21,14 @@ import { Button } from './components/ui/Button';
 
 function MainContent() {
   const { user, demoLogin } = useAuth();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTabState] = useState(() => {
+    return localStorage.getItem('recoverai_active_tab') || 'dashboard';
+  });
+
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    localStorage.setItem('recoverai_active_tab', tab);
+  };
   const [selectedTxn, setSelectedTxn] = useState<Transaction | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');

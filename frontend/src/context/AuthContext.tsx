@@ -65,7 +65,34 @@ const saveRegisteredUser = (email: string, pass: string, name: string) => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUserState] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('recoverai_current_user');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    const savedEmail = localStorage.getItem('recoverai_user_email');
+    if (savedEmail) {
+      return {
+        id: `usr-${savedEmail.replace(/[^a-z0-9]/g, '')}`,
+        email: savedEmail,
+        name: savedEmail.startsWith('admin') ? 'Payment Ops Admin' : savedEmail.split('@')[0],
+        role: savedEmail.startsWith('admin') ? 'Payment Operations Lead' : 'Merchant Account'
+      };
+    }
+    return null;
+  });
+
+  const setUser = (u: AuthUser | null) => {
+    setUserState(u);
+    if (u) {
+      localStorage.setItem('recoverai_current_user', JSON.stringify(u));
+      localStorage.setItem('recoverai_user_email', u.email);
+    } else {
+      localStorage.removeItem('recoverai_current_user');
+      localStorage.removeItem('recoverai_user_email');
+    }
+  };
+
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -81,7 +108,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: 'Payment Operations'
         };
         setUser(u);
-        localStorage.setItem('recoverai_user_email', u.email);
       }
     });
 
@@ -96,7 +122,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: 'Payment Operations'
         };
         setUser(u);
-        localStorage.setItem('recoverai_user_email', u.email);
       }
     });
 
@@ -264,7 +289,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearApiCache();
     await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('recoverai_user_email');
   };
 
   const demoLogin = (role = 'Payment Operations Lead') => {
