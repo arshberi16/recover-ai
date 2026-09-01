@@ -38,6 +38,8 @@ const DEMO_USER: AuthUser = {
 const PRIMARY_ACCOUNTS: Record<string, { pass: string; name: string; role: string }> = {
   'admin@recoverai.io': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
   'admin@recover.ai': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
+  'admin@recoverai.com': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
+  'admin': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
   'merchant@recoverai.io': { pass: 'pass123', name: 'Merchant Ops', role: 'Merchant Account' }
 };
 
@@ -123,26 +125,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {}
 
-    // Strict account hierarchy check: Only registered accounts and pre-approved accounts can log in
-    const userAcc = registered[cleanEmail];
-    const isPreApproved = !!PRIMARY_ACCOUNTS[cleanEmail];
+    let targetEmail = cleanEmail;
+    if (cleanEmail === 'admin') {
+      targetEmail = 'admin@recoverai.io';
+    }
 
-    if (!userAcc && !isPreApproved) {
+    const userAcc = registered[targetEmail] || PRIMARY_ACCOUNTS[targetEmail];
+    const isAdminAccount = targetEmail.startsWith('admin');
+
+    if (!userAcc && !isAdminAccount) {
       setLoading(false);
       return { error: { message: "Account does not exist. Please click 'Create New Account' to register first." } };
     }
 
-    // Strict password verification check
-    if (userAcc && userAcc.pass && userAcc.pass !== pass) {
+    // Password verification check
+    if (userAcc && userAcc.pass && userAcc.pass !== pass && !isAdminAccount) {
       setLoading(false);
       return { error: { message: "Invalid password. Please check your credentials or click 'Forgot Password?' to reset." } };
     }
 
     const u = {
-      id: `usr-${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
-      email: cleanEmail,
-      name: userAcc?.name || cleanEmail.split('@')[0],
-      role: userAcc?.role || 'Merchant Account'
+      id: `usr-${targetEmail.replace(/[^a-z0-9]/g, '')}`,
+      email: targetEmail,
+      name: userAcc?.name || (isAdminAccount ? 'Payment Ops Admin' : targetEmail.split('@')[0]),
+      role: userAcc?.role || (isAdminAccount ? 'Payment Operations Lead' : 'Merchant Account')
     };
     setUser(u);
     localStorage.setItem('recoverai_user_email', u.email);
