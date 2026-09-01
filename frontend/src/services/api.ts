@@ -26,7 +26,7 @@ const getBaseUrl = (): string => {
   return 'http://127.0.0.1:8000/api';
 };
 
-const API_BASE_URL = getBaseUrl();
+export const API_BASE_URL = getBaseUrl();
 
 const apiCache = new Map<string, { timestamp: number; data: any }>();
 const inFlightRequests = new Map<string, Promise<any>>();

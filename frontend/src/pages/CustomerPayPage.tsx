@@ -9,10 +9,11 @@ import {
   ArrowRight, 
   FileText,
   RefreshCw,
-  Smartphone
+  Smartphone,
+  Mail
 } from 'lucide-react';
 import type { Transaction } from '../types';
-import { fetchTransactions, executeRecoveryAction } from '../services/api';
+import { fetchTransactions, executeRecoveryAction, API_BASE_URL } from '../services/api';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 
@@ -145,12 +146,12 @@ export const CustomerPayPage: React.FC = () => {
     setShowAuthModal(false);
     setProcessing(true);
 
-    const targetEmail = receiptEmail || transaction.customer?.email || localStorage.getItem('recoverai_user_email') || 'customer@example.com';
+    const targetEmail = receiptEmail.trim() || transaction.customer?.email || localStorage.getItem('recoverai_user_email') || 'customer@example.com';
     const generatedReceiptNum = receiptNumber || `REC-${Math.floor(100000 + Math.random() * 900000)}`;
     setReceiptNumber(generatedReceiptNum);
 
     try {
-      // 1. Dispatch Vercel Serverless Payment Receipt Email instantly in parallel
+      // 1. Dispatch Vercel Serverless Payment Receipt Email
       if (typeof window !== 'undefined') {
         fetch('/api/send-receipt', {
           method: 'POST',
@@ -164,6 +165,19 @@ export const CustomerPayPage: React.FC = () => {
           })
         }).catch(() => {});
       }
+
+      // 2. Dispatch Backend API Payment Receipt Endpoint Fallback
+      fetch(`${API_BASE_URL}/actions/send-receipt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: targetEmail,
+          name: transaction.customer?.name || 'Valued Customer',
+          transaction_id: transaction.transaction_id,
+          amount: transaction.amount,
+          receipt_number: generatedReceiptNum
+        })
+      }).catch(() => {});
 
       await executeRecoveryAction(
         transaction.transaction_id, 
@@ -284,6 +298,25 @@ export const CustomerPayPage: React.FC = () => {
                 <span>
                   Previous attempt failed due to <strong>{transaction.failure_reason}</strong> ({transaction.bank || 'HDFC Bank'}). Click below to complete instant retry.
                 </span>
+              </div>
+            </div>
+
+            {/* Customer Email Input for Receipt */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                <span>Email Address for Payment Receipt</span>
+                <span className="text-[10px] text-blue-400 font-medium">Instant PDF Confirmation</span>
+              </div>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+                <input
+                  type="email"
+                  value={receiptEmail}
+                  onChange={(e) => setReceiptEmail(e.target.value)}
+                  placeholder="your.email@gmail.com"
+                  required
+                  className="w-full pl-10 pr-3 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
             </div>
 

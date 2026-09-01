@@ -25,6 +25,13 @@ class ResetEmailRequest(BaseModel):
     email: str
     reset_code: str
 
+class ReceiptEmailRequest(BaseModel):
+    email: str
+    name: str = "Valued Customer"
+    transaction_id: str
+    amount: float
+    receipt_number: str
+
 @router.post("/send-otp")
 def send_otp_verification(req: OTPRequest):
     """
@@ -48,6 +55,21 @@ def send_reset_code_confirmation(req: ResetEmailRequest):
     """
     res = send_password_reset_email(req.email, req.reset_code)
     return {"success": True, "email": req.email, "email_sent": True, "detail": res}
+
+@router.post("/send-receipt")
+def send_receipt_confirmation_endpoint(req: ReceiptEmailRequest, background_tasks: BackgroundTasks):
+    """
+    Dispatches physical HTML payment receipt confirmation email to recipient.
+    """
+    background_tasks.add_task(
+        send_receipt_confirmation_email,
+        to_email=req.email,
+        customer_name=req.name,
+        transaction_id=req.transaction_id,
+        amount=float(req.amount),
+        receipt_number=req.receipt_number
+    )
+    return {"success": True, "email": req.email, "email_sent": True}
 
 def is_valid_uuid(val: str) -> bool:
     try:
