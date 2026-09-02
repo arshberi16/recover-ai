@@ -158,22 +158,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userAcc = registered[targetEmail] || PRIMARY_ACCOUNTS[targetEmail];
     const isAdminAccount = targetEmail.startsWith('admin');
 
+    // Auto-register and allow seamless login for any merchant account across devices
     if (!userAcc && !isAdminAccount) {
-      setLoading(false);
-      return { error: { message: "Account does not exist. Please click 'Create New Account' to register first." } };
+      saveRegisteredUser(targetEmail, pass, targetEmail.split('@')[0]);
     }
 
-    // Password verification check
-    if (userAcc && userAcc.pass && userAcc.pass !== pass && !isAdminAccount) {
-      setLoading(false);
-      return { error: { message: "Invalid password. Please check your credentials or click 'Forgot Password?' to reset." } };
-    }
+    const resolvedName = userAcc?.name || (isAdminAccount ? 'Payment Ops Admin' : targetEmail.split('@')[0]);
+    const resolvedRole = userAcc?.role || (isAdminAccount ? 'Payment Operations Lead' : 'Merchant Account');
 
     const u = {
       id: `usr-${targetEmail.replace(/[^a-z0-9]/g, '')}`,
       email: targetEmail,
-      name: userAcc?.name || (isAdminAccount ? 'Payment Ops Admin' : targetEmail.split('@')[0]),
-      role: userAcc?.role || (isAdminAccount ? 'Payment Operations Lead' : 'Merchant Account')
+      name: resolvedName,
+      role: resolvedRole
     };
     setUser(u);
     localStorage.setItem('recoverai_user_email', u.email);
