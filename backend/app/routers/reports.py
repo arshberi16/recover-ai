@@ -1,22 +1,36 @@
-import io
-import os
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from app.database import get_db
-from app.models import Transaction, Report
+from app.models import Transaction, Report, Customer
 from app.schemas import ReportGenerateRequest
 from app.services.pdf_report_service import generate_backend_pdf_report
 
 router = APIRouter(prefix="/api/reports", tags=["Reports System"])
 
+def apply_report_user_filter(query, user_email: Optional[str]):
+    if not user_email or not user_email.strip():
+        return query.filter(Customer.phone == "__NONE__")
+    
+    email_clean = user_email.strip().lower()
+    return query.filter(
+        or_(
+            Customer.email.ilike(email_clean),
+            Customer.phone.ilike(email_clean),
+            Customer.phone.contains(email_clean)
+        )
+    )
+
 @router.post("/generate")
-def generate_report(req: ReportGenerateRequest, db: Session = Depends(get_db)):
+def generate_report(req: ReportGenerateRequest, user_email: Optional[str] = Query(None), db: Session = Depends(get_db)):
     """
     Generates structured PDF/CSV analytics reports from PostgreSQL telemetry.
     """
-    txns = db.query(Transaction).all()
+    query = db.query(Transaction).join(Customer)
+    query = apply_report_user_filter(query, user_email)
+    txns = query.all()
     
     total_txns = len(txns)
     failed_txns = [t for t in txns if t.status in ["FAILED", "Failed", "PENDING"]]
@@ -54,17 +68,19 @@ def generate_report(req: ReportGenerateRequest, db: Session = Depends(get_db)):
             "total_revenue_lost": round(lost_amount, 2),
             "potential_recovery": round(pot_rec, 2),
             "total_revenue_recovered": round(recovered_amount, 2),
-            "recovery_rate": round((pot_rec / lost_amount * 100.0) if lost_amount > 0 else 72.0, 1)
+            "recovery_rate": round((pot_rec / lost_amount * 100.0) if lost_amount > 0 else 0.0, 1)
         },
-        "download_url": f"/api/reports/download/{file_name}"
+        "download_url": f"/api/reports/download/{file_name}?user_email={user_email or ''}"
     }
 
 @router.get("/download/{filename}")
-def download_report_file(filename: str, db: Session = Depends(get_db)):
+def download_report_file(filename: str, user_email: Optional[str] = Query(None), db: Session = Depends(get_db)):
     """
     Renders and streams backend ReportLab PDF or CSV report files on-the-fly.
     """
-    txns = db.query(Transaction).all()
+    query = db.query(Transaction).join(Customer)
+    query = apply_report_user_filter(query, user_email)
+    txns = query.all()
     failed_txns = [t for t in txns if t.status in ["FAILED", "Failed", "PENDING"]]
     lost_amount = sum(float(t.amount) for t in failed_txns)
     pot_rec = sum(float(t.amount) * ((t.recovery_probability or 70.0) / 100.0) for t in failed_txns)

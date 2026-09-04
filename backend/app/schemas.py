@@ -118,6 +118,7 @@ class InsightQueryRequest(BaseModel):
     question: str
     date_range: Optional[str] = "30d"
     user_id: Optional[str] = None
+    user_email: Optional[str] = None
 
 class KeyFindingItem(BaseModel):
     title: str

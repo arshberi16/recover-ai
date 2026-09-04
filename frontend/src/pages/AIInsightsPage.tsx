@@ -166,7 +166,7 @@ export const AIInsightsPage: React.FC<AIInsightsPageProps> = ({ onNavigateTab })
     scrollToBottom();
 
     try {
-      const response = await queryAIInsights(userMessage);
+      const response = await queryAIInsights(userMessage, '30d', userEmail);
       const assistantMsgObj: ChatMessage = { role: 'assistant', responseData: response };
 
       setSessions(prevSessions => {

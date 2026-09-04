@@ -305,11 +305,12 @@ export async function fetchMLMetrics(): Promise<MLMetricsResponse> {
   return await res.json();
 }
 
-export async function queryAIInsights(question: string, date_range: string = "30d"): Promise<InsightQueryResponse> {
+export async function queryAIInsights(question: string, date_range: string = "30d", user_email?: string): Promise<InsightQueryResponse> {
+  const email = user_email || localStorage.getItem('recoverai_user_email') || '';
   const res = await fetch(`${API_BASE_URL}/insights/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, date_range })
+    body: JSON.stringify({ question, date_range, user_email: email })
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to query RecoverAI AI Analyst`);
   return await res.json();

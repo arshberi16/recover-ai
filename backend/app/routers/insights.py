@@ -66,6 +66,7 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
     time_analysis = ctx.get("time_based_analysis", {})
     rec = ctx.get("recovery_queue_analysis", {})
     txn_detail = ctx.get("transaction_detail")
+    is_empty = ctx.get("is_empty_account", False) or ctx.get("total_transaction_count", 0) == 0
 
     # Greeting Intent
     if intent == "greeting":
@@ -79,8 +80,8 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
             ],
             supporting_metrics=[
                 MetricItem(label="Active Merchant Ledger", value="Live Connected"),
-                MetricItem(label="High Priority Targets", value=str(rec.get("high_priority_transaction_count", 23))),
-                MetricItem(label="Opportunity Rate", value=f"{rev.get('recovery_opportunity_rate_percent', 64.5)}%")
+                MetricItem(label="High Priority Targets", value=str(rec.get("high_priority_transaction_count", 0 if is_empty else 23))),
+                MetricItem(label="Opportunity Rate", value=f"{rev.get('recovery_opportunity_rate_percent', 0.0 if is_empty else 64.5)}%")
             ],
             recommended_actions=[
                 ActionItem(
@@ -94,6 +95,31 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
                     impact="Analyze rail reliability",
                     priority="HIGH",
                     target_page="insights"
+                )
+            ],
+            source="rule_based_fallback"
+        )
+
+    # If the merchant account has no transactions ingested
+    if is_empty:
+        return InsightQueryResponse(
+            intent=intent,
+            answer="No transaction telemetry found for your merchant account. Upload a bank statement (PDF/CSV) or add manual transaction failure logs on the Dashboard to view payment failure insights and AI recovery recommendations.",
+            key_findings=[
+                KeyFindingItem(title="Empty Merchant Ledger", description="0 failed or pending transactions found for this account."),
+                KeyFindingItem(title="Telemetry Ingestion Required", description="Upload bank statements (PDF/CSV) or ingest transaction logs to evaluate recovery probabilities.")
+            ],
+            supporting_metrics=[
+                MetricItem(label="Account Status", value="Active (0 Data Ingested)"),
+                MetricItem(label="Revenue at Risk", value="₹0.00"),
+                MetricItem(label="Actionable Priorities", value="0")
+            ],
+            recommended_actions=[
+                ActionItem(
+                    action="Upload Bank Statement or Transaction CSV/PDF",
+                    impact="Analyze failure patterns and generate AI recovery recommendations",
+                    priority="HIGH",
+                    target_page="dashboard"
                 )
             ],
             source="rule_based_fallback"
@@ -127,20 +153,20 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
 
     # General / Analytical Intents
     if intent in ["revenue_analysis", "failure_analysis"]:
-        ans = f"Total revenue at risk is ₹{rev.get('total_revenue_at_risk', 2485000):,.0f}, with a projected recoverable capital of ₹{rev.get('potential_recoverable_capital', 1640000):,.0f} ({rev.get('recovery_opportunity_rate_percent', 68)}% opportunity rate)."
+        ans = f"Total revenue at risk is ₹{rev.get('total_revenue_at_risk', 0):,.0f}, with a projected recoverable capital of ₹{rev.get('potential_recoverable_capital', 0):,.0f} ({rev.get('recovery_opportunity_rate_percent', 0)}% opportunity rate)."
         findings = [
             KeyFindingItem(title="Primary Failure Cause", description=f"Top failure driver is {fail_cause.get('top_failure_cause', 'Bank Decline')} affecting revenue."),
             KeyFindingItem(title="Evening Peak Surge", description=f"UPI timeouts increased during {time_analysis.get('peak_failure_window', '19:00-22:00 IST')}."),
-            KeyFindingItem(title="Actionable Queue Size", description=f"{rec.get('high_priority_transaction_count', 34)} high-priority transactions represent ₹{rec.get('high_priority_recoverable_capital', 420000):,.0f} in recoverable volume.")
+            KeyFindingItem(title="Actionable Queue Size", description=f"{rec.get('high_priority_transaction_count', 0)} high-priority transactions represent ₹{rec.get('high_priority_recoverable_capital', 0):,.0f} in recoverable volume.")
         ]
         metrics = [
-            MetricItem(label="Revenue at Risk", value=f"₹{(rev.get('total_revenue_at_risk', 2485000)/100000):.2f}L"),
-            MetricItem(label="Potential Recovery", value=f"₹{(rev.get('potential_recoverable_capital', 1640000)/100000):.2f}L"),
-            MetricItem(label="Opportunity Rate", value=f"{rev.get('recovery_opportunity_rate_percent', 68)}%")
+            MetricItem(label="Revenue at Risk", value=f"₹{(rev.get('total_revenue_at_risk', 0)/100000):.2f}L"),
+            MetricItem(label="Potential Recovery", value=f"₹{(rev.get('potential_recoverable_capital', 0)/100000):.2f}L"),
+            MetricItem(label="Opportunity Rate", value=f"{rev.get('recovery_opportunity_rate_percent', 0)}%")
         ]
         actions = [
             ActionItem(action="Schedule Off-Peak Retries for Evening Failures", impact="Potential recovery of ₹4.2L", priority="HIGH", target_page="recovery"),
-            ActionItem(action="Batch Retry High-Priority Queue", impact="Target top 15 high-scoring transactions", priority="HIGH", target_page="recovery")
+            ActionItem(action="Batch Retry High-Priority Queue", impact="Target top high-scoring transactions", priority="HIGH", target_page="recovery")
         ]
     elif intent == "payment_method_analysis":
         worst_m = pm.get("worst_performing_method", "UPI")
@@ -173,17 +199,17 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
             ActionItem(action="Investigate Bank Failure Telemetry", impact="Review bank breakdown charts", priority="HIGH", target_page="analytics")
         ]
     else:
-        ans = f"RecoverAI telemetry models indicate ₹{rev.get('potential_recoverable_capital', 1640000):,.0f} in recoverable capital across {rec.get('high_priority_transaction_count', 34)} high-priority transactions."
+        ans = f"RecoverAI telemetry models indicate ₹{rev.get('potential_recoverable_capital', 0):,.0f} in recoverable capital across {rec.get('high_priority_transaction_count', 0)} high-priority transactions."
         findings = [
-            KeyFindingItem(title="High Value Focus", description="Top 15 high-priority transactions represent over 50% of recoverable revenue."),
+            KeyFindingItem(title="High Value Focus", description="Top high-priority transactions represent over 50% of recoverable revenue."),
             KeyFindingItem(title="Retry Timing", description="Retrying bank declines 30-45 minutes outside peak hours boosts conversion.")
         ]
         metrics = [
-            MetricItem(label="Recoverable Capital", value=f"₹{(rev.get('potential_recoverable_capital', 1640000)/100000):.2f}L"),
-            MetricItem(label="High Priority Queue", value=str(rec.get("high_priority_transaction_count", 34)))
+            MetricItem(label="Recoverable Capital", value=f"₹{(rev.get('potential_recoverable_capital', 0)/100000):.2f}L"),
+            MetricItem(label="High Priority Queue", value=str(rec.get("high_priority_transaction_count", 0)))
         ]
         actions = [
-            ActionItem(action="Execute High-Priority Batch Retry", impact="Recover up to ₹16.4L", priority="HIGH", target_page="recovery")
+            ActionItem(action="Execute High-Priority Batch Retry", impact="Recover high-scoring transactions", priority="HIGH", target_page="recovery")
         ]
 
     return InsightQueryResponse(
@@ -203,8 +229,10 @@ def query_ai_insights(req: InsightQueryRequest, db: Session = Depends(get_db)):
     intent_info = detect_user_intent(req.question)
     primary_intent = intent_info.get("primary_intent", "executive_summary")
 
-    # Build verified numeric context from DB
-    analytics_ctx = build_structured_analytics_context(db, intent_info, date_range=req.date_range or "30d")
+    # Build verified numeric context from DB scoped strictly to user_email
+    analytics_ctx = build_structured_analytics_context(
+        db, intent_info, date_range=req.date_range or "30d", user_email=req.user_email
+    )
 
     # Try Gemini API Generation
     gemini_result = generate_gemini_insights(req.question, analytics_ctx)

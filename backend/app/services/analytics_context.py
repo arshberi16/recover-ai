@@ -1,7 +1,7 @@
 import re
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, or_
 from app.models import Transaction, Customer, BusinessInsight
 
 def detect_user_intent(question: str) -> Dict[str, Any]:
@@ -52,8 +52,59 @@ def detect_user_intent(question: str) -> Dict[str, Any]:
         "all_intents": intents
     }
 
-def build_structured_analytics_context(db: Session, intent_info: Dict[str, Any], date_range: str = "30d") -> Dict[str, Any]:
-    totals = db.query(
+def build_structured_analytics_context(db: Session, intent_info: Dict[str, Any], date_range: str = "30d", user_email: Optional[str] = None) -> Dict[str, Any]:
+    base_query = db.query(Transaction).join(Customer)
+    if user_email and user_email.strip():
+        email_clean = user_email.strip().lower()
+        base_query = base_query.filter(
+            or_(
+                Customer.email.ilike(email_clean),
+                Customer.phone.ilike(email_clean),
+                Customer.phone.contains(email_clean)
+            )
+        )
+    else:
+        # If no user_email is passed, isolate to explicit non-existing records to prevent cross-account leak
+        base_query = base_query.filter(Customer.phone == "__NONE__")
+
+    total_count = base_query.count()
+
+    if total_count == 0:
+        return {
+            "date_range": date_range,
+            "detected_intent": intent_info.get("primary_intent"),
+            "is_empty_account": True,
+            "total_transaction_count": 0,
+            "transaction_detail": None,
+            "revenue_summary": {
+                "total_revenue_at_risk": 0.0,
+                "revenue_change_percent": 0.0,
+                "potential_recoverable_capital": 0.0,
+                "recovery_opportunity_rate_percent": 0.0,
+                "failed_transaction_count": 0
+            },
+            "payment_method_analysis": {
+                "worst_performing_method": "N/A",
+                "best_performing_method": "N/A"
+            },
+            "bank_reliability_analysis": {
+                "highest_failure_bank": "N/A"
+            },
+            "failure_reason_analysis": {
+                "top_failure_cause": "N/A"
+            },
+            "time_based_analysis": {
+                "peak_failure_window": "N/A",
+                "upi_evening_surge": "0%"
+            },
+            "recovery_queue_analysis": {
+                "high_priority_transaction_count": 0,
+                "high_priority_recoverable_capital": 0.0,
+                "avg_high_priority_recovery_probability": 0.0
+            }
+        }
+
+    totals = base_query.with_entities(
         func.count(Transaction.id).label("total_cnt"),
         func.sum(case((Transaction.status.in_(["FAILED", "PENDING"]), Transaction.amount), else_=0.0)).label("revenue_at_risk"),
         func.sum(case((Transaction.status.in_(["FAILED", "PENDING"]), Transaction.amount * (Transaction.recovery_probability / 100.0)), else_=0.0)).label("potential_recovery"),
@@ -63,13 +114,13 @@ def build_structured_analytics_context(db: Session, intent_info: Dict[str, Any],
     rev_at_risk = float(totals.revenue_at_risk or 0.0)
     pot_rec = float(totals.potential_recovery or 0.0)
     failed_cnt = totals.failed_cnt or 0
-    opp_rate = round((pot_rec / rev_at_risk * 100.0) if rev_at_risk > 0 else 68.0, 1)
+    opp_rate = round((pot_rec / rev_at_risk * 100.0) if rev_at_risk > 0 else 0.0, 1)
 
     # 1. Transaction Specific Context
     transaction_detail = None
     if intent_info.get("primary_intent") == "transaction_diagnosis":
         target_id = intent_info.get("transaction_id")
-        txn = db.query(Transaction).filter(Transaction.transaction_id == target_id).first()
+        txn = base_query.filter(Transaction.transaction_id == target_id).first()
         if txn:
             cust = txn.customer
             transaction_detail = {
@@ -91,7 +142,7 @@ def build_structured_analytics_context(db: Session, intent_info: Dict[str, Any],
             }
 
     # 2. Top failure cause
-    top_cause_row = db.query(
+    top_cause_row = base_query.with_entities(
         Transaction.failure_reason,
         func.count(Transaction.id).label("cnt"),
         func.sum(Transaction.amount).label("vol")
@@ -102,17 +153,17 @@ def build_structured_analytics_context(db: Session, intent_info: Dict[str, Any],
     top_cause = top_cause_row.failure_reason if top_cause_row else "Bank Decline"
 
     # 3. Highest failure rate bank
-    top_bank_row = db.query(
+    top_bank_row = base_query.with_entities(
         Transaction.bank_name,
         func.count(Transaction.id).label("tot"),
         func.sum(case((Transaction.status.in_(["FAILED", "PENDING"]), 1), else_=0)).label("failed_cnt")
     ).group_by(Transaction.bank_name)\
      .order_by((func.sum(case((Transaction.status.in_(["FAILED", "PENDING"]), 1), else_=0)) / func.count(Transaction.id)).desc()).first()
 
-    worst_bank = top_bank_row.bank_name if top_bank_row else "HDFC"
+    worst_bank = top_bank_row.bank_name if top_bank_row else "N/A"
 
     # 4. High priority opportunities count and volume
-    high_prio_stats = db.query(
+    high_prio_stats = base_query.with_entities(
         func.count(Transaction.id).label("cnt"),
         func.sum(Transaction.amount).label("vol"),
         func.avg(Transaction.recovery_probability).label("avg_prob")
@@ -128,6 +179,8 @@ def build_structured_analytics_context(db: Session, intent_info: Dict[str, Any],
     return {
         "date_range": date_range,
         "detected_intent": intent_info.get("primary_intent"),
+        "is_empty_account": False,
+        "total_transaction_count": total_count,
         "transaction_detail": transaction_detail,
         "revenue_summary": {
             "total_revenue_at_risk": round(rev_at_risk, 2),
