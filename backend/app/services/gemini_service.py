@@ -20,40 +20,57 @@ def get_gemini_client():
 
 def parse_pdf_with_gemini_ai(pdf_text: str) -> Optional[List[Dict[str, Any]]]:
     """
-    Uses Gemini AI to parse and extract structured transaction records from raw PDF text.
-    Intelligently identifies all columns: transaction_id, customer_name, customer_email, amount, payment_method, bank_name, failure_reason, transaction_timestamp.
+    Uses Gemini AI to parse and extract structured transaction records from raw PDF or text documents.
+    Intelligently maps columns even if header names differ (e.g. 'Ref No' -> transaction_id, 'Sum/Value/Amt' -> amount, 'Remarks' -> failure_reason).
+    Minimum required fields: transaction_id and amount. Missing columns are returned as null.
     """
     client = get_gemini_client()
     if not client or not pdf_text or not pdf_text.strip():
         return None
 
     prompt = f"""
-Extract all transaction records from the following text document.
-Filter out all columns, table headers, and rows into structured JSON array of transaction objects.
+You are an expert financial statement and transaction log parser.
+Extract all transaction records from the following text document into a JSON array of objects.
 
-Required JSON format:
+CRITICAL EXTRACTION RULES:
+1. MINIMUM REQUIRED FIELDS: A valid row MUST contain at minimum:
+   - "transaction_id": Any unique transaction reference code, order ID, payment ref, or ID string.
+   - "amount": The numeric monetary value, price, total, or sum (convert to float).
+2. FLEXIBLE COLUMN HEADER RECOGNITION: The document headers may vary widely. Intelligently map alternative column names:
+   - transaction_id: (Txn Ref, Ref No, Reference, Order ID, Payment ID, Transaction #, Txn ID, ID, Invoice #)
+   - amount: (Amount, Value, Sum, Total, Price, Debit, INR, Amt, Paid)
+   - customer_name: (Customer, Name, Payer, Client, User, Account Holder)
+   - customer_email: (Email, Customer Email, Payer Email, Contact Email)
+   - payment_method: (Method, Mode, Rail, Payment Type, Instrument, Gateway) -> Normalize to "UPI", "Credit Card", "Debit Card", "Net Banking", "Wallet", or null
+   - bank_name: (Bank, Issuer, Financial Institution, Gateway Bank) -> Normalize to "HDFC", "ICICI", "SBI", "Axis", "Kotak", or null
+   - failure_reason: (Reason, Failure Description, Remarks, Error Code, Decline Cause, Status Message)
+   - transaction_timestamp: (Date, Time, Timestamp, Txn Date) -> ISO YYYY-MM-DDTHH:MM:SS format if available, else null
+
+3. NULL FOR MISSING COLUMNS: If a column (e.g. customer_name, customer_email, payment_method, bank_name, failure_reason) is NOT present in the document, explicitly set its value to null. DO NOT drop valid rows if only transaction_id and amount are present!
+
+REQUIRED OUTPUT FORMAT (JSON Array ONLY):
 [
   {{
     "transaction_id": "TXN-XXXXX",
-    "customer_name": "Full Name",
-    "customer_email": "email@domain.com",
     "amount": 4999.0,
-    "payment_method": "UPI | Credit Card | Debit Card | Net Banking | Wallet",
-    "bank_name": "HDFC | ICICI | SBI | Axis | Kotak",
-    "failure_reason": "Bank Timeout | Insufficient Funds | Bank Decline | Network Error | Card Expired",
-    "transaction_timestamp": "YYYY-MM-DDTHH:MM:SS"
+    "customer_name": "Full Name or null",
+    "customer_email": "email@domain.com or null",
+    "payment_method": "UPI | Credit Card | Debit Card | Net Banking | Wallet | null",
+    "bank_name": "HDFC | ICICI | SBI | Axis | Kotak | null",
+    "failure_reason": "Bank Timeout | Insufficient Funds | Bank Decline | Network Error | Card Expired | null",
+    "transaction_timestamp": "YYYY-MM-DDTHH:MM:SS or null"
   }}
 ]
 
 TEXT DOCUMENT CONTENT:
-{pdf_text[:8000]}
+{pdf_text[:12000]}
 """
 
     for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             config = types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=3000,
+                max_output_tokens=4000,
                 response_mime_type="application/json"
             )
             response = client.models.generate_content(

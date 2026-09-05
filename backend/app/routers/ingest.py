@@ -247,17 +247,16 @@ def upload_and_parse_file(
     db: Session = Depends(get_db)
 ):
     """
-    Fast high-throughput bulk PDF/CSV telemetry export file reader and ML scorer.
+    Fast high-throughput bulk PDF/CSV telemetry file reader with AI column mapping,
+    2-column minimum validation (transaction_id & amount), and null field handling.
     """
     content_bytes = file.file.read()
     filename = file.filename.lower()
 
     extracted_records = []
-
-    # 1. Try parsing PDF file using pypdf
     user_clean = user_email.strip().lower() if user_email and user_email.strip() else None
 
-    # 1. Try parsing PDF file using Gemini AI + pypdf
+    # 1. Try parsing PDF file using Gemini AI + pypdf fallback
     if filename.endswith(".pdf") or content_bytes.startswith(b"%PDF"):
         try:
             pdf_file = io.BytesIO(content_bytes)
@@ -266,76 +265,111 @@ def upload_and_parse_file(
             for page in reader.pages:
                 full_text += (page.extract_text() or "") + "\n"
 
-            # Attempt Gemini AI extraction first
+            # Attempt Gemini AI flexible extraction first
             ai_records = parse_pdf_with_gemini_ai(full_text)
             if ai_records and len(ai_records) > 0:
                 extracted_records = ai_records
             else:
-                pattern = r"(TXN-\d+)\s+([A-Za-z\s]+?)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s+[■₹]?([\d,]+)\s+(Debit Card|Credit Card|UPI|Net Banking|Wallet)\s+(Bank Decline|Bank Timeout|Insufficient Funds|Network Error|Card Expired)\s+(\d{2}/\d{2}/\d{4},\s*\d{2}:\d{2}\s*(?:AM|PM)?)"
-                matches = re.findall(pattern, full_text)
+                # Regex Fallback: First try full 7-column pattern
+                pattern_full = r"(TXN-\d+)\s+([A-Za-z\s]+?)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s+[■₹]?([\d,]+(?:\.\d{2})?)\s+(Debit Card|Credit Card|UPI|Net Banking|Wallet)\s+(Bank Decline|Bank Timeout|Insufficient Funds|Network Error|Card Expired)\s+(\d{2}/\d{2}/\d{4},\s*\d{2}:\d{2}\s*(?:AM|PM)?)"
+                matches = re.findall(pattern_full, full_text)
 
                 for m in matches:
                     txn_id, name, email, amount_str, method, reason, date_str = m
                     clean_amount = float(amount_str.replace(",", ""))
-
-                    iso_ts = None
-                    try:
-                        dt_match = re.search(r"(\d{2})/(\d{2})/(\d{4}),?\s*(\d{2}):(\d{2})\s*(AM|PM)?", date_str, re.I)
-                        if dt_match:
-                            d, m_num, y, hr, mn, ampm = dt_match.groups()
-                            hr_num = int(hr)
-                            if ampm:
-                                if ampm.upper() == "PM" and hr_num < 12:
-                                    hr_num += 12
-                                elif ampm.upper() == "AM" and hr_num == 12:
-                                    hr_num = 0
-                            iso_ts = f"{y}-{m_num}-{d}T{hr_num:02d}:{mn}:00"
-                    except Exception:
-                        pass
-
-                    bank_map = {
-                        "Credit Card": "ICICI",
-                        "Debit Card": "SBI",
-                        "UPI": "HDFC",
-                        "Net Banking": "Axis",
-                        "Wallet": "Kotak"
-                    }
+                    bank_map = {"Credit Card": "ICICI", "Debit Card": "SBI", "UPI": "HDFC", "Net Banking": "Axis", "Wallet": "Kotak"}
 
                     extracted_records.append({
                         "transaction_id": clean_parsed_field(txn_id, ["transaction_id"]),
+                        "amount": clean_amount,
                         "customer_name": clean_parsed_field(name, ["customer_name"]),
                         "customer_email": clean_parsed_field(email, ["customer_email"]),
-                        "amount": clean_amount,
                         "payment_method": clean_parsed_field(method, ["payment_method"]),
                         "bank_name": bank_map.get(clean_parsed_field(method, ["payment_method"]), "HDFC"),
                         "failure_reason": clean_parsed_field(reason, ["failure_reason"]),
-                        "transaction_timestamp": iso_ts or datetime.utcnow().isoformat()
+                        "transaction_timestamp": datetime.utcnow().isoformat()
                     })
+
+                # Minimal Fallback: If full pattern failed, extract (TXN-XXXX / Ref) and Amount
+                if not extracted_records:
+                    min_pattern = r"(TXN-\w+|\b[A-Z0-9_-]{6,20}\b)[\s,:]+[■₹]?([\d,]+(?:\.\d{2})?)"
+                    min_matches = re.findall(min_pattern, full_text)
+                    for m_id, m_amt in min_matches:
+                        try:
+                            clean_amt = float(m_amt.replace(",", ""))
+                            if clean_amt > 0:
+                                extracted_records.append({
+                                    "transaction_id": clean_parsed_field(m_id, ["transaction_id"]),
+                                    "amount": clean_amt,
+                                    "customer_name": None,
+                                    "customer_email": None,
+                                    "payment_method": None,
+                                    "bank_name": None,
+                                    "failure_reason": None,
+                                    "transaction_timestamp": datetime.utcnow().isoformat()
+                                })
+                        except Exception:
+                            pass
         except Exception as e:
             print("PDF parsing error:", e)
 
-    # 2. Try CSV parsing if not PDF
+    # 2. Try CSV parsing with dynamic header column auto-detection
     if not extracted_records and (filename.endswith(".csv") or b"," in content_bytes[:1000]):
         try:
             text = content_bytes.decode("utf-8", errors="ignore")
             lines = [l.strip() for l in text.split("\n") if l.strip()]
-            for line in lines[1:]:
-                parts = [p.strip().strip('"\'') for p in line.split(",")]
-                if len(parts) >= 6:
+            if lines:
+                header_parts = [h.strip().strip('"\'').lower() for h in lines[0].split(",")]
+                col_map = {}
+                for idx, h in enumerate(header_parts):
+                    if any(k in h for k in ["txn", "ref", "id", "identifier", "order", "invoice"]):
+                        if "transaction_id" not in col_map: col_map["transaction_id"] = idx
+                    elif any(k in h for k in ["amount", "amt", "value", "sum", "total", "price", "debit", "inr", "paid"]):
+                        if "amount" not in col_map: col_map["amount"] = idx
+                    elif any(k in h for k in ["name", "customer", "payer", "client", "user"]) and "email" not in h:
+                        if "customer_name" not in col_map: col_map["customer_name"] = idx
+                    elif any(k in h for k in ["email", "mail"]):
+                        if "customer_email" not in col_map: col_map["customer_email"] = idx
+                    elif any(k in h for k in ["method", "mode", "rail", "type", "instrument"]):
+                        if "payment_method" not in col_map: col_map["payment_method"] = idx
+                    elif any(k in h for k in ["bank", "issuer"]):
+                        if "bank_name" not in col_map: col_map["bank_name"] = idx
+                    elif any(k in h for k in ["reason", "failure", "cause", "decline", "remark", "error"]):
+                        if "failure_reason" not in col_map: col_map["failure_reason"] = idx
+                    elif any(k in h for k in ["date", "time", "timestamp"]):
+                        if "transaction_timestamp" not in col_map: col_map["transaction_timestamp"] = idx
+
+                has_header = "transaction_id" in col_map or "amount" in col_map
+                data_lines = lines[1:] if has_header else lines
+
+                for line in data_lines:
+                    parts = [p.strip().strip('"\'') for p in line.split(",")]
+                    if not parts or len(parts) < 2:
+                        continue
+
+                    raw_txn_id = parts[col_map["transaction_id"]] if "transaction_id" in col_map and col_map["transaction_id"] < len(parts) else parts[0]
+                    raw_amount = parts[col_map["amount"]] if "amount" in col_map and col_map["amount"] < len(parts) else parts[1] if len(parts) > 1 else "0"
+
+                    clean_amt_str = re.sub(r"[^\d.]", "", raw_amount)
+                    clean_amt = float(clean_amt_str) if clean_amt_str else 0.0
+
+                    if not raw_txn_id and clean_amt == 0:
+                        continue
+
                     extracted_records.append({
-                        "transaction_id": clean_parsed_field(parts[0], ["transaction_id"]) or f"TXN-{uuid.uuid4().hex[:6].upper()}",
-                        "customer_name": clean_parsed_field(parts[1], ["customer_name"]) or "Customer",
-                        "customer_email": clean_parsed_field(parts[2], ["customer_email"]) or "customer@example.com",
-                        "amount": float(parts[3]) if parts[3].replace(".", "").isdigit() else 1999.0,
-                        "payment_method": clean_parsed_field(parts[4], ["payment_method"]) or "UPI",
-                        "bank_name": parts[5] if len(parts) > 5 else "HDFC",
-                        "failure_reason": clean_parsed_field(parts[6], ["failure_reason"]) if len(parts) > 6 else "Bank Timeout",
-                        "transaction_timestamp": parts[7] if len(parts) > 7 else datetime.utcnow().isoformat()
+                        "transaction_id": clean_parsed_field(raw_txn_id, ["transaction_id"]) or f"TXN-{uuid.uuid4().hex[:6].upper()}",
+                        "amount": clean_amt,
+                        "customer_name": clean_parsed_field(parts[col_map["customer_name"]], ["customer_name"]) if "customer_name" in col_map and col_map["customer_name"] < len(parts) else None,
+                        "customer_email": clean_parsed_field(parts[col_map["customer_email"]], ["customer_email"]) if "customer_email" in col_map and col_map["customer_email"] < len(parts) else None,
+                        "payment_method": clean_parsed_field(parts[col_map["payment_method"]], ["payment_method"]) if "payment_method" in col_map and col_map["payment_method"] < len(parts) else None,
+                        "bank_name": parts[col_map["bank_name"]] if "bank_name" in col_map and col_map["bank_name"] < len(parts) else None,
+                        "failure_reason": clean_parsed_field(parts[col_map["failure_reason"]], ["failure_reason"]) if "failure_reason" in col_map and col_map["failure_reason"] < len(parts) else None,
+                        "transaction_timestamp": parts[col_map["transaction_timestamp"]] if "transaction_timestamp" in col_map and col_map["transaction_timestamp"] < len(parts) else None
                     })
         except Exception as e:
             print("CSV parsing error:", e)
 
-    # Fallback dataset if empty
+    # Fallback dataset if file parsing yielded 0 valid rows
     if not extracted_records:
         extracted_records = FULL_PDF_TEST_DATASET
 
@@ -345,11 +379,24 @@ def upload_and_parse_file(
 
     count = 0
     for rec in extracted_records:
-        txn_id = clean_parsed_field(rec["transaction_id"], ["transaction_id"])
-        c_email = clean_parsed_field(rec["customer_email"], ["customer_email"])
-        c_name = clean_parsed_field(rec["customer_name"], ["customer_name"])
-        p_method = clean_parsed_field(rec["payment_method"], ["payment_method"])
-        f_reason = clean_parsed_field(rec["failure_reason"], ["failure_reason"])
+        txn_id = clean_parsed_field(rec.get("transaction_id") or "", ["transaction_id"])
+        if not txn_id or txn_id.lower() in ["transaction_id", "txn ref", "ref no", "id"]:
+            continue
+
+        raw_amt = rec.get("amount", 0.0)
+        try:
+            amt_val = float(raw_amt)
+        except Exception:
+            amt_val = 0.0
+
+        c_email = clean_parsed_field(rec.get("customer_email") or "", ["customer_email"])
+        if not c_email or "@" not in c_email:
+            c_email = f"customer_{txn_id.lower().replace('-', '_')}@{user_clean or 'merchant.internal'}"
+
+        c_name = clean_parsed_field(rec.get("customer_name") or "", ["customer_name"]) or None
+        p_method = clean_parsed_field(rec.get("payment_method") or "", ["payment_method"]) or "UPI"
+        bank_name = rec.get("bank_name") or "HDFC"
+        f_reason = clean_parsed_field(rec.get("failure_reason") or "", ["failure_reason"]) or None
 
         cust = existing_custs.get(c_email)
         if not cust:
@@ -367,7 +414,7 @@ def upload_and_parse_file(
             db.flush()
             existing_custs[c_email] = cust
         else:
-            if c_name and c_name != "Merchant Customer" and cust.name != c_name:
+            if c_name and cust.name != c_name:
                 cust.name = c_name
             if user_clean:
                 if not cust.phone:
@@ -378,23 +425,23 @@ def upload_and_parse_file(
         ts = datetime.utcnow()
         if rec.get("transaction_timestamp"):
             try:
-                ts = datetime.fromisoformat(rec["transaction_timestamp"].replace('Z', ''))
+                ts = datetime.fromisoformat(str(rec["transaction_timestamp"]).replace('Z', ''))
             except Exception:
                 pass
 
         existing_txn = existing_txns.get(txn_id)
         if existing_txn:
             existing_txn.customer_id = cust.id
-            existing_txn.amount = rec["amount"]
+            existing_txn.amount = amt_val
             existing_txn.payment_method = p_method
-            existing_txn.bank_name = rec["bank_name"]
+            existing_txn.bank_name = bank_name
             existing_txn.transaction_timestamp = ts
             existing_txn.transaction_hour = ts.hour
             existing_txn.failure_reason = f_reason
             existing_txn.status = "FAILED"
         else:
             ml_res = ml_engine.predict(
-                amount=float(rec["amount"]),
+                amount=amt_val,
                 method=p_method,
                 reason=f_reason or "Bank Timeout",
                 hour=ts.hour,
@@ -405,10 +452,10 @@ def upload_and_parse_file(
                 id=uuid.uuid4(),
                 transaction_id=txn_id,
                 customer_id=cust.id,
-                amount=rec["amount"],
+                amount=amt_val,
                 currency="INR",
                 payment_method=p_method,
-                bank_name=rec["bank_name"],
+                bank_name=bank_name,
                 transaction_timestamp=ts,
                 transaction_hour=ts.hour,
                 failure_reason=f_reason,
@@ -427,6 +474,6 @@ def upload_and_parse_file(
 
     return {
         "success": True,
-        "message": f"Successfully parsed and ingested {count} payment records from uploaded PDF file!",
+        "message": f"Successfully parsed and ingested {count} payment records from uploaded file!",
         "count": count
     }
