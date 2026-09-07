@@ -24,8 +24,8 @@ export const SettingsPage: React.FC = () => {
   const { user, deleteAccount } = useAuth();
 
   // Profile Form
-  const [name, setName] = useState('Payment Operations Lead');
-  const [email, setEmail] = useState('admin@recoverai.io');
+  const [name, setName] = useState(user?.name || 'Payment Operations Lead');
+  const [email, setEmail] = useState(user?.email || 'test@recoverai.io');
   const role = 'Administrator';
 
   // Recovery Rules

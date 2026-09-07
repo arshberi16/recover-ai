@@ -29,13 +29,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEMO_USER: AuthUser = {
   id: 'usr-demo-001',
-  email: 'admin@recoverai.io',
+  email: 'test@recoverai.io',
   name: 'Payment Ops Admin',
   role: 'Payment Operations Lead',
   avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'
 };
 
 const PRIMARY_ACCOUNTS: Record<string, { pass: string; name: string; role: string }> = {
+  'test@recoverai.io': { pass: 'test123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
+  'test@gmail.com': { pass: 'test123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
+  'test': { pass: 'test123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
   'admin@recoverai.io': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
   'admin@recover.ai': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
   'admin@recoverai.com': { pass: 'admin123', name: 'Payment Ops Admin', role: 'Payment Operations Lead' },
@@ -151,12 +154,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {}
 
     let targetEmail = cleanEmail;
-    if (cleanEmail === 'admin') {
-      targetEmail = 'admin@recoverai.io';
+    if (cleanEmail === 'admin' || cleanEmail === 'test') {
+      targetEmail = 'test@recoverai.io';
     }
 
     const userAcc = registered[targetEmail] || PRIMARY_ACCOUNTS[targetEmail];
-    const isAdminAccount = targetEmail.startsWith('admin');
+    const isAdminAccount = targetEmail.startsWith('admin') || targetEmail.startsWith('test');
 
     // Auto-register and allow seamless login for any merchant account across devices
     if (!userAcc && !isAdminAccount) {

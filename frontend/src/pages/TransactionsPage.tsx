@@ -537,7 +537,7 @@ export const TransactionsPage: React.FC<TransactionsPageProps> = ({
       <ImportDataModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        userEmail={localStorage.getItem('recoverai_user_email') || 'admin@recoverai.io'}
+        userEmail={localStorage.getItem('recoverai_user_email') || 'test@recoverai.io'}
         onImportSuccess={(msg) => {
           setToastMsg(msg);
           loadData();
