@@ -25,6 +25,7 @@ export default async function handler(req, res) {
 
   const recipientName = name || email.split('@')[0];
 
+  try {
     const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'recoveryai1909@gmail.com';
     const smtpPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || '';
 

@@ -29,6 +29,7 @@ export default async function handler(req, res) {
   const formattedAmount = amount ? Number(amount).toLocaleString('en-IN') : '4,999';
   const payLink = `https://recover-ai-gilt.vercel.app/pay?txn=${encodeURIComponent(transaction_id)}&email=${encodeURIComponent(cleanEmail)}`;
 
+  try {
     const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'recoveryai1909@gmail.com';
     const smtpPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || '';
 

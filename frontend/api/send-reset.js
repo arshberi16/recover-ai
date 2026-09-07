@@ -23,6 +23,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Email and reset_code are required' });
   }
 
+  try {
     const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'recoveryai1909@gmail.com';
     const smtpPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || '';
 
