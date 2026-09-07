@@ -29,14 +29,16 @@ export default async function handler(req, res) {
   const formattedAmount = amount ? Number(amount).toLocaleString('en-IN') : '4,999';
   const payLink = `https://recover-ai-gilt.vercel.app/pay?txn=${encodeURIComponent(transaction_id)}&email=${encodeURIComponent(cleanEmail)}`;
 
-  try {
+    const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'recoveryai1909@gmail.com';
+    const smtpPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || '';
+
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
       secure: false,
       auth: {
-        user: 'recoveryai1909@gmail.com',
-        pass: 'mgvegyphvywjuclw'
+        user: smtpUser,
+        pass: smtpPass
       }
     });
 
@@ -91,8 +93,8 @@ export default async function handler(req, res) {
     `;
 
     const info = await transporter.sendMail({
-      from: '"RecoverAI Engine" <recoveryai1909@gmail.com>',
-      replyTo: 'recoveryai1909@gmail.com',
+      from: `"RecoverAI Engine" <${smtpUser}>`,
+      replyTo: smtpUser,
       to: cleanEmail,
       subject: `Action Required: Complete Your Payment of ₹${formattedAmount} for ${transaction_id}`,
       html: htmlContent

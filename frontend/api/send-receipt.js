@@ -29,14 +29,16 @@ export default async function handler(req, res) {
   const formattedAmount = amount ? Number(amount).toLocaleString('en-IN') : '4,999';
   const receiptNum = receipt_number || `REC-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  try {
+    const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'recoveryai1909@gmail.com';
+    const smtpPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || '';
+
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
       secure: false,
       auth: {
-        user: 'recoveryai1909@gmail.com',
-        pass: 'mgvegyphvywjuclw'
+        user: smtpUser,
+        pass: smtpPass
       }
     });
 
@@ -88,8 +90,8 @@ export default async function handler(req, res) {
     `;
 
     const info = await transporter.sendMail({
-      from: '"RecoverAI Payment Gateway" <recoveryai1909@gmail.com>',
-      replyTo: 'recoveryai1909@gmail.com',
+      from: `"RecoverAI Payment Gateway" <${smtpUser}>`,
+      replyTo: smtpUser,
       to: cleanEmail,
       subject: `Payment Confirmed: Receipt ${receiptNum} for ₹${formattedAmount}`,
       html: htmlContent

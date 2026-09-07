@@ -25,14 +25,16 @@ export default async function handler(req, res) {
 
   const recipientName = name || email.split('@')[0];
 
-  try {
+    const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'recoveryai1909@gmail.com';
+    const smtpPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || '';
+
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
       secure: false,
       auth: {
-        user: 'recoveryai1909@gmail.com',
-        pass: 'mgvegyphvywjuclw'
+        user: smtpUser,
+        pass: smtpPass
       }
     });
 
@@ -84,7 +86,7 @@ export default async function handler(req, res) {
     `;
 
     await transporter.sendMail({
-      from: 'RecoverAI Engine <recoveryai1909@gmail.com>',
+      from: `RecoverAI Engine <${smtpUser}>`,
       to: email,
       subject: `Welcome to RecoverAI, ${recipientName}! Account Created Successfully 🎉`,
       html: htmlContent

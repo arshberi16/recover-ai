@@ -21,7 +21,7 @@ def send_recovery_email(
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = os.getenv("SMTP_PORT", "587")
     smtp_user = os.getenv("SMTP_USER", "recoveryai1909@gmail.com")
-    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or "mgvegyphvywjuclw"
+    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD", "")
 
     from_sender = f"RecoverAI Engine <{smtp_user}>"
 
@@ -95,7 +95,7 @@ def send_receipt_confirmation_email(
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = os.getenv("SMTP_PORT", "587")
     smtp_user = os.getenv("SMTP_USER", "recoveryai1909@gmail.com")
-    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or "mgvegyphvywjuclw"
+    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD", "")
 
     from_sender = f"RecoverAI Engine <{smtp_user}>"
     subject = f"Payment Confirmed: Receipt {receipt_number} for ₹{amount:,.0f}"
@@ -276,7 +276,7 @@ def send_welcome_email(to_email: str, customer_name: str) -> dict:
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = os.getenv("SMTP_PORT", "587")
     smtp_user = os.getenv("SMTP_USER", "recoveryai1909@gmail.com")
-    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or "mgvegyphvywjuclw"
+    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD", "")
 
     from_sender = f"RecoverAI Engine <{smtp_user}>"
     subject = f"Welcome to RecoverAI, {customer_name}! Account Created Successfully 🎉"
@@ -340,7 +340,7 @@ def send_password_reset_email(to_email: str, reset_code: str) -> dict:
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = os.getenv("SMTP_PORT", "587")
     smtp_user = os.getenv("SMTP_USER", "recoveryai1909@gmail.com")
-    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD") or "mgvegyphvywjuclw"
+    smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("GMAIL_APP_PASSWORD", "")
 
     from_sender = f"RecoverAI Engine <{smtp_user}>"
     subject = f"{reset_code} is your RecoverAI Password Reset Code"
