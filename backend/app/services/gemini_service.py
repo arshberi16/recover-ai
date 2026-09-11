@@ -66,7 +66,7 @@ TEXT DOCUMENT CONTENT:
 {pdf_text[:12000]}
 """
 
-    for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+    for model_name in ["gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             config = types.GenerateContentConfig(
                 temperature=0.1,
@@ -152,7 +152,7 @@ INSTRUCTIONS:
 }}
 """
 
-    for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+    for model_name in ["gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             config = types.GenerateContentConfig(
                 system_instruction=GEMINI_SYSTEM_INSTRUCTION,

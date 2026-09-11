@@ -1,0 +1,21 @@
+# Environment & Secrets
+.env
+.env.*
+*.env
+.env.local
+.env.production
+.env.development
+
+# Python
+backend/.env
+backend/.env.*
+backend/__pycache__/
+*.pyc
+venv/
+.pytest_cache/
+*.joblib
+
+# Node / Frontend
+node_modules/
+dist/
+.DS_Store

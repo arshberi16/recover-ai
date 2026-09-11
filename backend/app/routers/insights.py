@@ -135,17 +135,20 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
 
     # High Risk Transactions Intent
     if intent == "high_risk_transactions":
-        top_txns = context.get("top_high_risk_transactions", [])
+        top_txns = ctx.get("top_high_risk_transactions", [])
         if top_txns:
-            txns_text = ", ".join([f"{t['transaction_id']} (₹{t['amount']:,.0f})" for t in top_txns[:3]])
+            txns_text = ", ".join([f"{t.get('transaction_id', 'TXN')} (₹{float(t.get('amount', 0)):,.0f})" for t in top_txns[:3]])
             ans = f"Top high-risk failed transactions requiring recovery action: {txns_text}."
             findings = [
-                KeyFindingItem(title=f"High Risk: {t['transaction_id']}", description=f"Customer {t['customer_name']} (₹{t['amount']:,.0f}) failed due to {t['failure_reason']} via {t['bank']}. ML Recovery Confidence: {t['recovery_probability']}%.")
-                for t in top_txns[:3]
+                KeyFindingItem(
+                    title=f"High Risk: {t.get('transaction_id', 'TXN')}",
+                    description=f"Customer {t.get('customer_name', 'Customer')} (₹{float(t.get('amount', 0)):,.0f}) failed due to {t.get('failure_reason', 'Decline')} via {t.get('bank', 'Bank')}. ML Recovery Confidence: {t.get('recovery_probability', 80)}%."
+                )
+                for t in top_txns[:5]
             ]
             metrics = [
-                MetricItem(label=f"Risk #{i+1}", value=f"₹{t['amount']:,.0f}")
-                for i, t in enumerate(top_txns[:3])
+                MetricItem(label=f"Risk #{i+1}", value=f"₹{float(t.get('amount', 0)):,.0f}")
+                for i, t in enumerate(top_txns[:5])
             ]
             actions = [
                 ActionItem(action="Execute High-Priority Batch Retry", impact="Recover top high-value failed payments", priority="HIGH", target_page="recovery")
@@ -156,6 +159,19 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
                 key_findings=findings,
                 supporting_metrics=metrics,
                 recommended_actions=actions,
+                source="rule_based_fallback"
+            )
+        else:
+            return InsightQueryResponse(
+                intent=intent,
+                answer="No high-risk failed transactions found in your transaction telemetry.",
+                key_findings=[
+                    KeyFindingItem(title="No High Risk Telemetry", description="There are currently no active high-risk transaction failures in your merchant ledger.")
+                ],
+                supporting_metrics=[],
+                recommended_actions=[
+                    ActionItem(action="View Full Dashboard Telemetry", impact="Monitor overall payment success rates", priority="MEDIUM", target_page="dashboard")
+                ],
                 source="rule_based_fallback"
             )
 
@@ -260,63 +276,95 @@ def query_ai_insights(req: InsightQueryRequest, db: Session = Depends(get_db)):
     """
     AI Conversational Telemetry Query Endpoint with DB Chat Persistence.
     """
-    intent_info = detect_user_intent(req.question)
-    primary_intent = intent_info.get("primary_intent", "executive_summary")
+    try:
+        intent_info = detect_user_intent(req.question)
+        primary_intent = intent_info.get("primary_intent", "executive_summary")
 
-    # Build verified numeric context from DB scoped strictly to user_email
-    analytics_ctx = build_structured_analytics_context(
-        db, intent_info, date_range=req.date_range or "30d", user_email=req.user_email
-    )
+        # Build verified numeric context from DB scoped strictly to user_email
+        analytics_ctx = build_structured_analytics_context(
+            db, intent_info, date_range=req.date_range or "30d", user_email=req.user_email
+        )
 
-    # Try Gemini API Generation
-    gemini_result = generate_gemini_insights(req.question, analytics_ctx)
+        # Try Gemini API Generation
+        gemini_result = generate_gemini_insights(req.question, analytics_ctx)
 
-    if gemini_result:
-        try:
-            key_findings = [KeyFindingItem(**kf) for kf in gemini_result.get("key_findings", [])]
-            supporting_metrics = [MetricItem(**sm) for sm in gemini_result.get("supporting_metrics", [])]
-            recommended_actions = [ActionItem(**ra) for ra in gemini_result.get("recommended_actions", [])]
-
-            res_obj = InsightQueryResponse(
-                intent=primary_intent,
-                answer=gemini_result.get("answer", "Analysis completed based on verified database metrics."),
-                key_findings=key_findings,
-                supporting_metrics=supporting_metrics,
-                recommended_actions=recommended_actions,
-                source="gemini"
-            )
-
-            # Persist chat message to database
+        if gemini_result:
             try:
-                conv = db.query(AIConversation).first()
-                if not conv:
-                    conv = AIConversation(id=uuid.uuid4(), title="Payment Operations Intelligence Chat")
-                    db.add(conv)
+                key_findings = []
+                for kf in gemini_result.get("key_findings", []):
+                    if isinstance(kf, dict) and "title" in kf and "description" in kf:
+                        key_findings.append(KeyFindingItem(title=str(kf["title"]), description=str(kf["description"])))
+
+                supporting_metrics = []
+                for sm in gemini_result.get("supporting_metrics", []):
+                    if isinstance(sm, dict) and "label" in sm and "value" in sm:
+                        supporting_metrics.append(MetricItem(label=str(sm["label"]), value=str(sm["value"])))
+
+                recommended_actions = []
+                for ra in gemini_result.get("recommended_actions", []):
+                    if isinstance(ra, dict) and "action" in ra and "impact" in ra:
+                        recommended_actions.append(ActionItem(
+                            action=str(ra["action"]),
+                            impact=str(ra["impact"]),
+                            priority=str(ra.get("priority", "HIGH")),
+                            target_page=str(ra.get("target_page", "recovery"))
+                        ))
+
+                res_obj = InsightQueryResponse(
+                    intent=primary_intent,
+                    answer=str(gemini_result.get("answer", "Analysis completed based on verified database metrics.")),
+                    key_findings=key_findings,
+                    supporting_metrics=supporting_metrics,
+                    recommended_actions=recommended_actions,
+                    source="gemini"
+                )
+
+                # Persist chat message to database
+                try:
+                    conv = db.query(AIConversation).first()
+                    if not conv:
+                        conv = AIConversation(id=uuid.uuid4(), title="Payment Operations Intelligence Chat")
+                        db.add(conv)
+                        db.commit()
+
+                    user_msg = AIMessage(
+                        id=uuid.uuid4(),
+                        conversation_id=conv.id,
+                        role="USER",
+                        content=req.question
+                    )
+                    assistant_msg = AIMessage(
+                        id=uuid.uuid4(),
+                        conversation_id=conv.id,
+                        role="ASSISTANT",
+                        content=res_obj.answer,
+                        message_metadata={"source": "gemini", "intent": primary_intent}
+                    )
+                    db.add_all([user_msg, assistant_msg])
                     db.commit()
+                except Exception as pe:
+                    print(f"Could not persist AI message: {pe}")
 
-                user_msg = AIMessage(
-                    id=uuid.uuid4(),
-                    conversation_id=conv.id,
-                    role="USER",
-                    content=req.question
-                )
-                assistant_msg = AIMessage(
-                    id=uuid.uuid4(),
-                    conversation_id=conv.id,
-                    role="ASSISTANT",
-                    content=res_obj.answer,
-                    message_metadata={"source": "gemini", "intent": primary_intent}
-                )
-                db.add_all([user_msg, assistant_msg])
-                db.commit()
-            except Exception as pe:
-                print(f"Could not persist AI message: {pe}")
+                return res_obj
 
-            return res_obj
+            except Exception as err:
+                print(f"Failed to validate Gemini JSON schema: {err}. Falling back to analytics engine.")
 
-        except Exception as err:
-            print(f"Failed to validate Gemini JSON schema: {err}. Falling back to analytics engine.")
+        # Fallback response
+        fallback_res = build_rule_based_fallback_response(primary_intent, req.question, analytics_ctx)
+        return fallback_res
 
-    # Fallback response
-    fallback_res = build_rule_based_fallback_response(primary_intent, req.question, analytics_ctx)
-    return fallback_res
+    except Exception as top_err:
+        print(f"Unhandled error in query_ai_insights: {top_err}")
+        return InsightQueryResponse(
+            intent="general_chat",
+            answer="I'm analyzing your payment telemetry. Please ask again or specify a transaction ID or date range.",
+            key_findings=[
+                KeyFindingItem(title="Telemetry Query System", description="System processed your request. Feel free to refine your question.")
+            ],
+            supporting_metrics=[],
+            recommended_actions=[
+                ActionItem(action="Ask: 'What should I prioritize today?'", impact="Explore priority recovery actions", priority="HIGH", target_page="insights")
+            ],
+            source="rule_based_fallback"
+        )
