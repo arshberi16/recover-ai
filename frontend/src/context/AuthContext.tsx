@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
-import { clearApiCache, registerMerchantProfile, sendWelcomeEmail, sendResetCodeEmail as sendResetCodeEmailService } from '../services/api';
+import { clearApiCache, clearTransactions, registerMerchantProfile, sendWelcomeEmail, sendResetCodeEmail as sendResetCodeEmailService } from '../services/api';
 
 interface AuthUser {
   id: string;
@@ -65,6 +65,30 @@ const saveRegisteredUser = (email: string, pass: string, name: string) => {
   const users = getRegisteredUsers();
   users[email.toLowerCase().trim()] = { pass, name, role: 'Merchant Account' };
   localStorage.setItem('recoverai_registered_users', JSON.stringify(users));
+};
+
+const getDeletedUsers = (): Record<string, boolean> => {
+  try {
+    const raw = localStorage.getItem('recoverai_deleted_users');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return {};
+};
+
+const markUserDeleted = (email: string) => {
+  try {
+    const deleted = getDeletedUsers();
+    deleted[email.toLowerCase().trim()] = true;
+    localStorage.setItem('recoverai_deleted_users', JSON.stringify(deleted));
+  } catch (e) {}
+};
+
+const removeUserFromDeleted = (email: string) => {
+  try {
+    const deleted = getDeletedUsers();
+    delete deleted[email.toLowerCase().trim()];
+    localStorage.setItem('recoverai_deleted_users', JSON.stringify(deleted));
+  } catch (e) {}
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -135,6 +159,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     clearApiCache();
     const cleanEmail = email.toLowerCase().trim();
+
+    // Block deleted accounts from logging back in
+    const deletedUsers = getDeletedUsers();
+    if (deletedUsers[cleanEmail]) {
+      setLoading(false);
+      return { error: { message: "Account does not exist. Please click 'Create New Account' to register first." } };
+    }
+
     const registered = getRegisteredUsers();
 
     try {
@@ -161,9 +193,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userAcc = registered[targetEmail] || PRIMARY_ACCOUNTS[targetEmail];
     const isAdminAccount = targetEmail.startsWith('admin') || targetEmail.startsWith('test');
 
-    // Auto-register and allow seamless login for any merchant account across devices
     if (!userAcc && !isAdminAccount) {
-      saveRegisteredUser(targetEmail, pass, targetEmail.split('@')[0]);
+      setLoading(false);
+      return { error: { message: "Account does not exist. Please click 'Create New Account' to register first." } };
     }
 
     const resolvedName = userAcc?.name || (isAdminAccount ? 'Payment Ops Admin' : targetEmail.split('@')[0]);
@@ -185,6 +217,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     clearApiCache();
     const cleanEmail = email.toLowerCase().trim();
+    removeUserFromDeleted(cleanEmail);
 
     // 1. Block duplicate registrations if email already exists in system registry
     const registered = getRegisteredUsers();
@@ -243,6 +276,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     clearApiCache();
     const cleanEmail = email.toLowerCase().trim();
+    removeUserFromDeleted(cleanEmail);
     
     try {
       // 1. Verify via Supabase Auth OTP verification
@@ -305,13 +339,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const emailToDelete = (targetEmail || user?.email || '').toLowerCase().trim();
     if (!emailToDelete) return { success: false };
 
+    // 1. Remove from registered users registry and mark as deleted
     const users = getRegisteredUsers();
     delete users[emailToDelete];
     localStorage.setItem('recoverai_registered_users', JSON.stringify(users));
+    markUserDeleted(emailToDelete);
 
-    if (user?.email.toLowerCase() === emailToDelete) {
-      await signOut();
-    }
+    // 2. Clear backend database transactions for this account
+    try {
+      await clearTransactions(emailToDelete);
+    } catch (e) {}
+
+    // 3. Clear user session and sign out completely
+    localStorage.removeItem('recoverai_current_user');
+    localStorage.removeItem('recoverai_user_email');
+    await signOut();
+
     return { success: true };
   };
 

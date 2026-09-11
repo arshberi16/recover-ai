@@ -184,8 +184,8 @@ export async function fetchTransactions(params?: any): Promise<{ items: Transact
   return data;
 }
 
-export async function clearTransactions(): Promise<{ success: boolean; message: string }> {
-  const email = localStorage.getItem('recoverai_user_email') || 'demo';
+export async function clearTransactions(targetEmail?: string): Promise<{ success: boolean; message: string }> {
+  const email = targetEmail || localStorage.getItem('recoverai_user_email') || 'demo';
   const res = await fetch(`${API_BASE_URL}/transactions/clear?user_email=${encodeURIComponent(email)}`, {
     method: 'POST'
   });
