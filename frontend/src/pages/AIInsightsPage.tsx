@@ -254,7 +254,23 @@ export const AIInsightsPage: React.FC<AIInsightsPageProps> = ({ onNavigateTab })
   };
 
   const handleActionNavigation = (targetPage: string) => {
-    onNavigateTab(targetPage || 'recovery');
+    let tab = (targetPage || 'recovery').toLowerCase().trim();
+    if (tab.includes('queue') || tab.includes('recovery') || tab.includes('retry')) {
+      tab = 'recovery';
+    } else if (tab.includes('txn') || tab.includes('transaction') || tab.includes('registry')) {
+      tab = 'transactions';
+    } else if (tab.includes('analytic') || tab.includes('chart')) {
+      tab = 'analytics';
+    } else if (tab.includes('report')) {
+      tab = 'reports';
+    } else if (tab.includes('setting')) {
+      tab = 'settings';
+    } else if (tab.includes('dash')) {
+      tab = 'dashboard';
+    } else {
+      tab = 'recovery';
+    }
+    onNavigateTab(tab);
   };
 
   return (

@@ -137,6 +137,32 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
             source="rule_based_fallback"
         )
 
+    # High Risk Transactions Intent
+    if intent == "high_risk_transactions":
+        top_txns = context.get("top_high_risk_transactions", [])
+        if top_txns:
+            txns_text = ", ".join([f"{t['transaction_id']} (₹{t['amount']:,.0f})" for t in top_txns[:3]])
+            ans = f"Top high-risk failed transactions requiring recovery action: {txns_text}."
+            findings = [
+                KeyFindingItem(title=f"High Risk: {t['transaction_id']}", description=f"Customer {t['customer_name']} (₹{t['amount']:,.0f}) failed due to {t['failure_reason']} via {t['bank']}. ML Recovery Confidence: {t['recovery_probability']}%.")
+                for t in top_txns[:3]
+            ]
+            metrics = [
+                MetricItem(label=f"Risk #{i+1}", value=f"₹{t['amount']:,.0f}")
+                for i, t in enumerate(top_txns[:3])
+            ]
+            actions = [
+                ActionItem(action="Execute High-Priority Batch Retry", impact="Recover top high-value failed payments", priority="HIGH", target_page="recovery")
+            ]
+            return InsightQueryResponse(
+                intent=intent,
+                answer=ans,
+                key_findings=findings,
+                supporting_metrics=metrics,
+                recommended_actions=actions,
+                source="rule_based_fallback"
+            )
+
     # Transaction Diagnosis Intent
     if intent == "transaction_diagnosis" and txn_detail:
         return InsightQueryResponse(

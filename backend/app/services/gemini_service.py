@@ -129,36 +129,52 @@ VERIFIED DATABASE ANALYTICS CONTEXT:
 {json.dumps(context, indent=2)}
 
 INSTRUCTIONS:
-Respond intelligently to the user prompt. If it is a normal greeting or chat, provide a friendly conversational answer. If it is an analytics query, ground your figures in the context JSON.
-Return JSON ONLY matching the required format.
+1. If the user prompt is a greeting ("hi", "hello", "hey") or farewell ("bye", "bye bye", "goodbye", "thanks"), respond with a friendly, natural conversational answer. Set key_findings, supporting_metrics, and recommended_actions to relevant tips or empty lists. DO NOT dump numerical revenue loss data for casual greetings or farewells!
+2. If context.is_empty_account is True, explain politely that no transactions exist for this account yet and invite them to import a PDF/CSV statement.
+3. If user asked for high risk or top failing transactions, reference the specific top_high_risk_transactions list from the context.
+4. Always return valid JSON ONLY matching the required schema:
+{{
+  "answer": "<Friendly conversational response or financial analysis summary>",
+  "key_findings": [
+    {{"title": "<Finding Title>", "description": "<Factual detail or tip>"}}
+  ],
+  "supporting_metrics": [
+    {{"label": "<Metric Label>", "value": "<Metric Value>"}}
+  ],
+  "recommended_actions": [
+    {{"action": "<Recommended Action>", "impact": "<Business Impact>", "priority": "HIGH", "target_page": "recovery"}}
+  ]
+}}
 """
 
-    try:
-        config = types.GenerateContentConfig(
-            system_instruction=GEMINI_SYSTEM_INSTRUCTION,
-            temperature=0.4,
-            max_output_tokens=1500,
-            response_mime_type="application/json"
-        )
+    for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+        try:
+            config = types.GenerateContentConfig(
+                system_instruction=GEMINI_SYSTEM_INSTRUCTION,
+                temperature=0.3,
+                max_output_tokens=1500,
+                response_mime_type="application/json"
+            )
 
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt,
-            config=config
-        )
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=config
+            )
 
-        text_response = response.text.strip()
-        print("Successfully generated response with model: gemini-3.6-flash")
+            text_response = response.text.strip()
+            print(f"✓ Successfully generated Gemini AI response using model: {model_name}")
 
-        cleaned_text = re.sub(r'^```json\s*', '', text_response)
-        cleaned_text = re.sub(r'\s*```$', '', cleaned_text).strip()
+            cleaned_text = re.sub(r'^```json\s*', '', text_response)
+            cleaned_text = re.sub(r'\s*```$', '', cleaned_text).strip()
 
-        parsed_json = json.loads(cleaned_text)
-        parsed_json["source"] = "gemini"
-        return parsed_json
+            parsed_json = json.loads(cleaned_text)
+            parsed_json["source"] = "gemini"
+            return parsed_json
 
-    except Exception as e:
-        print(f"Gemini API model gemini-3.6-flash failed: {e}")
+        except Exception as e:
+            print(f"Gemini model {model_name} execution failed: {e}")
+            continue
 
-    print("Gemini API failed. Falling back to rule engine.")
+    print("All Gemini API models failed. Falling back to rule engine.")
     return None

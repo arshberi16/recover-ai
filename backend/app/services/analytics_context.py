@@ -15,7 +15,14 @@ def detect_user_intent(question: str) -> Dict[str, Any]:
             "transaction_id": txn_match.group(0).upper()
         }
 
-    # 2. Robust Fuzzy Greeting & Normal Chat Matching
+    # 2. Greeting, Farewell & Casual Chat Matching
+    farewell_or_greeting = ["bye", "bye bye", "goodbye", "cya", "thanks", "thank you", "ok", "okay", "cool", "great", "nice", "hello", "hi", "hey", "sup", "wassup"]
+    if q in farewell_or_greeting or any(q.startswith(w) for w in ["bye", "thanks", "thank", "goodbye", "hi", "hello", "hey"]):
+        return {
+            "primary_intent": "greeting",
+            "all_intents": ["greeting"]
+        }
+
     greeting_pattern = r'^(h+[e3a]*l+o*|h+i+|h+e+y+|h+l+o|wassup|yo|greetings|good\s*(morning|afternoon|evening|day)|who\s*are\s*you|what\s*can\s*you\s*do|how\s*are\s*you|how\s*do\s*you\s*do|tell\s*me|can\s*you\s*help|how\s*does\s*this|what\s*is\s*this)'
     if re.search(greeting_pattern, q):
         return {
@@ -23,7 +30,14 @@ def detect_user_intent(question: str) -> Dict[str, Any]:
             "all_intents": ["greeting"]
         }
 
-    # 3. Keyword-based intent classification
+    # 3. High Risk Transactions Query
+    if any(k in q for k in ["top 5", "top 10", "high risk", "risk transaction", "highest risk", "worst transaction", "large failure", "largest risk", "higher risk"]):
+        return {
+            "primary_intent": "high_risk_transactions",
+            "all_intents": ["high_risk_transactions"]
+        }
+
+    # 4. Keyword-based intent classification
     intents = []
     if any(k in q for k in ["revenue", "loss", "increase", "drop", "money", "risk", "leakage", "stat", "metric"]):
         intents.append("revenue_analysis")
@@ -42,7 +56,7 @@ def detect_user_intent(question: str) -> Dict[str, Any]:
 
     # If short text without domain keywords, classify as greeting instead of forcing executive summary
     if not intents:
-        if len(q) <= 10 or q in ["test", "demo", "start", "help", "info"]:
+        if len(q) <= 12 or q in ["test", "demo", "start", "help", "info"]:
             intents.append("greeting")
         else:
             intents.append("executive_summary")
@@ -188,12 +202,31 @@ def build_structured_analytics_context(db: Session, intent_info: Dict[str, Any],
     high_vol = float(high_prio_stats.vol or 0.0)
     avg_prob = round(float(high_prio_stats.avg_prob or 80.0), 1)
 
+    # 5. Top 5 High Risk Failed Transactions
+    top_5_txns = base_query.filter(
+        Transaction.status.in_(["FAILED", "PENDING"])
+    ).order_by(Transaction.amount.desc()).limit(5).all()
+
+    top_high_risk_list = []
+    for t in top_5_txns:
+        c_name = t.customer.name if t.customer else "Unknown Customer"
+        top_high_risk_list.append({
+            "transaction_id": t.transaction_id,
+            "customer_name": c_name,
+            "amount": float(t.amount),
+            "bank": t.bank_name,
+            "failure_reason": t.failure_reason,
+            "recovery_probability": t.recovery_probability,
+            "priority_level": t.priority_level
+        })
+
     return {
         "date_range": date_range,
         "detected_intent": intent_info.get("primary_intent"),
         "is_empty_account": False,
         "total_transaction_count": total_count,
         "transaction_detail": transaction_detail,
+        "top_high_risk_transactions": top_high_risk_list,
         "revenue_summary": {
             "total_revenue_at_risk": round(rev_at_risk, 2),
             "revenue_change_percent": 18.2,
