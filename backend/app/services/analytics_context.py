@@ -54,12 +54,12 @@ def detect_user_intent(question: str) -> Dict[str, Any]:
     if any(k in q for k in ["prioritize", "queue", "priority", "today", "focus", "urgent", "action"]):
         intents.append("priority_recommendation")
 
-    # If short text without domain keywords, classify as greeting instead of forcing executive summary
+    # 5. Default to general_chat for any non-domain query (never force revenue numbers)
     if not intents:
-        if len(q) <= 12 or q in ["test", "demo", "start", "help", "info"]:
-            intents.append("greeting")
-        else:
-            intents.append("executive_summary")
+        return {
+            "primary_intent": "general_chat",
+            "all_intents": ["general_chat"]
+        }
 
     return {
         "primary_intent": intents[0],

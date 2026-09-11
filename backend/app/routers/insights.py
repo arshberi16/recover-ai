@@ -80,21 +80,17 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
     txn_detail = ctx.get("transaction_detail")
     is_empty = ctx.get("is_empty_account", False) or ctx.get("total_transaction_count", 0) == 0
 
-    # Greeting Intent
-    if intent == "greeting":
+    # Greeting & General Chat Intent (No Revenue Metrics Cards)
+    if intent in ["greeting", "general_chat"]:
         return InsightQueryResponse(
-            intent="greeting",
-            answer="Hello! I am your RecoverAI Revenue Intelligence Analyst. How can I help you analyze your payment failure telemetry today?",
+            intent=intent,
+            answer="Hello! I am your RecoverAI Revenue Intelligence Analyst. Feel free to ask me any question about your payment failure telemetry, issuer bank trends, or transaction recovery priorities!",
             key_findings=[
-                KeyFindingItem(title="Payment Rail Diagnostics", description="I can analyze failure rates across UPI, Credit Cards, Debit Cards, NetBanking, and Wallets."),
+                KeyFindingItem(title="Payment Failure Diagnostics", description="I analyze failure rates across UPI, Credit Cards, Debit Cards, NetBanking, and Wallets."),
                 KeyFindingItem(title="Issuer Bank Reliability", description="I track real-time downtime and failure trends across major issuer banks (HDFC, ICICI, SBI, Axis, Kotak)."),
-                KeyFindingItem(title="AI Recovery Priority Queue", description="I prioritize failed transactions based on machine learning recovery probability and customer lifetime value.")
+                KeyFindingItem(title="AI Recovery Priorities", description="Ask me: 'What should I prioritize today?' or 'Give top 5 higher risk transactions'.")
             ],
-            supporting_metrics=[
-                MetricItem(label="Active Merchant Ledger", value="Live Connected"),
-                MetricItem(label="High Priority Targets", value=str(rec.get("high_priority_transaction_count", 0 if is_empty else 23))),
-                MetricItem(label="Opportunity Rate", value=f"{rev.get('recovery_opportunity_rate_percent', 0.0 if is_empty else 64.5)}%")
-            ],
+            supporting_metrics=[],
             recommended_actions=[
                 ActionItem(
                     action="Ask: 'Why did revenue loss increase this week?'",
@@ -103,8 +99,8 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
                     target_page="insights"
                 ),
                 ActionItem(
-                    action="Ask: 'Which payment method has the highest failure rate?'",
-                    impact="Analyze rail reliability",
+                    action="Ask: 'Give top 5 higher risk transaction'",
+                    impact="Identify top priority recovery targets",
                     priority="HIGH",
                     target_page="insights"
                 )

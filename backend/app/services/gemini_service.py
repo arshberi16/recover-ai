@@ -129,10 +129,15 @@ VERIFIED DATABASE ANALYTICS CONTEXT:
 {json.dumps(context, indent=2)}
 
 INSTRUCTIONS:
-1. If the user prompt is a greeting ("hi", "hello", "hey") or farewell ("bye", "bye bye", "goodbye", "thanks"), respond with a friendly, natural conversational answer. Set key_findings, supporting_metrics, and recommended_actions to relevant tips or empty lists. DO NOT dump numerical revenue loss data for casual greetings or farewells!
-2. If context.is_empty_account is True, explain politely that no transactions exist for this account yet and invite them to import a PDF/CSV statement.
-3. If user asked for high risk or top failing transactions, reference the specific top_high_risk_transactions list from the context.
-4. Always return valid JSON ONLY matching the required schema:
+1. IF DETECTED INTENT IS "general_chat" OR "greeting" OR THE USER ASKED A NON-FINANCIAL / CASUAL QUESTION:
+   - Provide a natural, friendly, helpful conversational response to whatever the user asked.
+   - MANDATORY: Set "supporting_metrics": [] and "recommended_actions": []. DO NOT mention any revenue at risk, ₹ numbers, or database figures for casual/general chat!
+2. IF context.is_empty_account IS True:
+   - Explain politely that no transactions exist for this account yet and invite them to import a PDF/CSV statement. Set "supporting_metrics": [].
+3. IF DETECTED INTENT IS "high_risk_transactions" OR USER ASKED FOR TOP RISK TRANSACTIONS:
+   - Reference the specific "top_high_risk_transactions" list from the context.
+4. FOR ANALYTICAL/FINANCIAL QUERIES:
+   - Ground all figures strictly in the provided JSON context and include key_findings, supporting_metrics, and recommended_actions.
 {{
   "answer": "<Friendly conversational response or financial analysis summary>",
   "key_findings": [
