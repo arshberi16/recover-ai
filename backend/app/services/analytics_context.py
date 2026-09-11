@@ -30,16 +30,23 @@ def detect_user_intent(question: str) -> Dict[str, Any]:
             "all_intents": ["greeting"]
         }
 
-    # 3. High Risk Transactions Query
-    if any(k in q for k in ["top 5", "top 10", "high risk", "risk transaction", "highest risk", "worst transaction", "large failure", "largest risk", "higher risk"]):
+    # 3. Low Risk / High Probability Recovery Query
+    if any(k in q for k in ["low risk", "lower risk", "lowest risk", "least risk", "safe transaction", "safest", "easy recovery", "easiest recovery", "high probability"]):
+        return {
+            "primary_intent": "low_risk_transactions",
+            "all_intents": ["low_risk_transactions"]
+        }
+
+    # 4. High Risk / Worst Failure Transactions Query
+    if any(k in q for k in ["high risk", "higher risk", "highest risk", "worst transaction", "largest risk", "large failure", "critical failure", "maximum risk"]) or (("top 5" in q or "top 10" in q or "give 5" in q or "give 10" in q) and "transaction" in q):
         return {
             "primary_intent": "high_risk_transactions",
             "all_intents": ["high_risk_transactions"]
         }
 
-    # 4. Keyword-based intent classification
+    # 5. Keyword-based intent classification
     intents = []
-    if any(k in q for k in ["revenue", "loss", "increase", "drop", "money", "risk", "leakage", "stat", "metric"]):
+    if any(k in q for k in ["revenue", "loss", "increase", "drop", "money", "leakage", "stat", "metric"]):
         intents.append("revenue_analysis")
     if any(k in q for k in ["method", "upi", "card", "net banking", "wallet", "mode", "rail"]):
         intents.append("payment_method_analysis")
@@ -54,7 +61,7 @@ def detect_user_intent(question: str) -> Dict[str, Any]:
     if any(k in q for k in ["prioritize", "queue", "priority", "today", "focus", "urgent", "action"]):
         intents.append("priority_recommendation")
 
-    # 5. Default to general_chat for any non-domain query (never force revenue numbers)
+    # 6. Default to general_chat for any non-domain query (never force revenue numbers)
     if not intents:
         return {
             "primary_intent": "general_chat",
@@ -202,15 +209,33 @@ def build_structured_analytics_context(db: Session, intent_info: Dict[str, Any],
     high_vol = float(high_prio_stats.vol or 0.0)
     avg_prob = round(float(high_prio_stats.avg_prob or 80.0), 1)
 
-    # 5. Top 5 High Risk Failed Transactions
-    top_5_txns = base_query.filter(
+    # 5. Top 5 High Risk Failed Transactions (High Value / High Risk)
+    top_5_high_risk = base_query.filter(
         Transaction.status.in_(["FAILED", "PENDING"])
     ).order_by(Transaction.amount.desc()).limit(5).all()
 
     top_high_risk_list = []
-    for t in top_5_txns:
+    for t in top_5_high_risk:
         c_name = t.customer.name if t.customer else "Unknown Customer"
         top_high_risk_list.append({
+            "transaction_id": t.transaction_id,
+            "customer_name": c_name,
+            "amount": float(t.amount),
+            "bank": t.bank_name,
+            "failure_reason": t.failure_reason,
+            "recovery_probability": t.recovery_probability,
+            "priority_level": t.priority_level
+        })
+
+    # 6. Top 5 Low Risk Failed Transactions (High Recovery Probability / Easiest to Recover)
+    top_5_low_risk = base_query.filter(
+        Transaction.status.in_(["FAILED", "PENDING"])
+    ).order_by(Transaction.recovery_probability.desc(), Transaction.amount.asc()).limit(5).all()
+
+    top_low_risk_list = []
+    for t in top_5_low_risk:
+        c_name = t.customer.name if t.customer else "Unknown Customer"
+        top_low_risk_list.append({
             "transaction_id": t.transaction_id,
             "customer_name": c_name,
             "amount": float(t.amount),
@@ -227,6 +252,7 @@ def build_structured_analytics_context(db: Session, intent_info: Dict[str, Any],
         "total_transaction_count": total_count,
         "transaction_detail": transaction_detail,
         "top_high_risk_transactions": top_high_risk_list,
+        "top_low_risk_transactions": top_low_risk_list,
         "revenue_summary": {
             "total_revenue_at_risk": round(rev_at_risk, 2),
             "revenue_change_percent": 18.2,

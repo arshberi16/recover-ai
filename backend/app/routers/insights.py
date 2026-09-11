@@ -133,6 +133,48 @@ def build_rule_based_fallback_response(intent: str, question: str, ctx: dict) ->
             source="rule_based_fallback"
         )
 
+    # Low Risk / High Probability Recovery Transactions Intent
+    if intent == "low_risk_transactions":
+        low_txns = ctx.get("top_low_risk_transactions", [])
+        if low_txns:
+            txns_text = ", ".join([f"{t.get('transaction_id', 'TXN')} ({t.get('recovery_probability', 85)}% recovery)" for t in low_txns[:3]])
+            ans = f"Found {len(low_txns)} high-probability recovery transactions with lowest risk: {txns_text}."
+            findings = [
+                KeyFindingItem(
+                    title=f"Low Risk (High Probability): {t.get('transaction_id', 'TXN')}",
+                    description=f"Customer {t.get('customer_name', 'Customer')} (₹{float(t.get('amount', 0)):,.0f}) failed due to {t.get('failure_reason', 'Decline')} via {t.get('bank', 'Bank')}. High Recovery Confidence: {t.get('recovery_probability', 85)}%."
+                )
+                for t in low_txns[:5]
+            ]
+            metrics = [
+                MetricItem(label=f"Recovery #{i+1}", value=f"{t.get('recovery_probability', 85)}%")
+                for i, t in enumerate(low_txns[:5])
+            ]
+            actions = [
+                ActionItem(action="Execute Immediate Auto-Retry", impact="High probability recovery opportunity", priority="HIGH", target_page="recovery")
+            ]
+            return InsightQueryResponse(
+                intent=intent,
+                answer=ans,
+                key_findings=findings,
+                supporting_metrics=metrics,
+                recommended_actions=actions,
+                source="rule_based_fallback"
+            )
+        else:
+            return InsightQueryResponse(
+                intent=intent,
+                answer="No low-risk / high-probability transactions found in current transaction telemetry.",
+                key_findings=[
+                    KeyFindingItem(title="No Immediate Low Risk Queue", description="All failed transactions have standard or elevated risk levels.")
+                ],
+                supporting_metrics=[],
+                recommended_actions=[
+                    ActionItem(action="Review AI Recovery Queue", impact="Inspect all failed payment telemetry", priority="MEDIUM", target_page="recovery")
+                ],
+                source="rule_based_fallback"
+            )
+
     # High Risk Transactions Intent
     if intent == "high_risk_transactions":
         top_txns = ctx.get("top_high_risk_transactions", [])
